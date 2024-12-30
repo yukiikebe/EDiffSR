@@ -1,0 +1,62 @@
+24-12-29 23:36:30.203 - INFO:   name: Test-AID-iter180000
+  suffix: None
+  model: denoising
+  distortion: sr
+  gpu_ids: [0]
+  sde:[
+    max_sigma: 50
+    T: 100
+    schedule: cosine
+    eps: 0.005
+  ]
+  degradation:[
+    sigma: 25
+    noise_type: G
+    scale: 4
+  ]
+  path:[
+    pretrain_model_G: ../../../experiments/sisr/ediffsr/180000_G.pth
+    root: /workspace
+    results_root: /workspace/results/sisr/Test-AID-iter180000
+    log: /workspace/results/sisr/Test-AID-iter180000
+  ]
+  datasets:[
+    test 1:[
+      name: AID
+      mode: LQGT
+      dataroot_GT: /workspace/AID_sample/HR
+      dataroot_LQ: /workspace/AID_sample/LR
+      phase: test 1
+      scale: 4
+      data_type: img
+    ]
+  ]
+  network_G:[
+    which_model_G: ConditionalNAFNet
+    setting:[
+      width: 64
+      enc_blk_nums: [14, 1, 1, 1]
+      middle_blk_num: 1
+      dec_blk_nums: [1, 1, 1, 1]
+      upscale: 4
+    ]
+  ]
+  is_train: False
+
+24-12-29 23:36:30.205 - INFO: Dataset [LQGTDataset - AID] is created.
+24-12-29 23:36:30.205 - INFO: Number of test images in [AID]: 30
+24-12-29 23:36:30.205 - INFO: Number of iterations for testing in [AID]: 30
+24-12-29 23:36:31.183 - INFO: Loading model for G [../../../experiments/sisr/ediffsr/180000_G.pth] ...
+24-12-29 23:36:31.238 - INFO: Model [DenoisingModel] is created.
+24-12-29 23:36:31.239 - INFO: 
+Testing [AID]...
+24-12-29 23:36:56.550 - INFO:   1 - airport_146               - PSNR: 25.901824 dB; SSIM: 0.692808; PSNR_Y: 27.511542 dB; SSIM_Y: 0.740054; LPIPS: 0.438576; DISTS: 0.188180
+24-12-29 23:36:57.247 - INFO: FID Score: 214.62220904309126
+24-12-29 23:37:21.567 - INFO:   2 - bareland_261              - PSNR: 33.889496 dB; SSIM: 0.890281; PSNR_Y: 35.907001 dB; SSIM_Y: 0.929972; LPIPS: 0.443578; DISTS: 0.201854
+24-12-29 23:37:22.251 - INFO: FID Score: 133.85987592633808
+24-12-29 23:37:46.341 - INFO:   3 - baseballfield_82          - PSNR: 24.287481 dB; SSIM: 0.625239; PSNR_Y: 25.801557 dB; SSIM_Y: 0.673120; LPIPS: 0.467203; DISTS: 0.169109
+24-12-29 23:37:47.008 - INFO: FID Score: 186.79085622611345
+24-12-29 23:38:11.318 - INFO:   4 - beach_274                 - PSNR: 29.328402 dB; SSIM: 0.739504; PSNR_Y: 30.819890 dB; SSIM_Y: 0.779754; LPIPS: 0.437688; DISTS: 0.178754
+24-12-29 23:38:11.979 - INFO: FID Score: 149.66166525712973
+24-12-29 23:38:36.066 - INFO:   5 - bridge_295                - PSNR: 25.161939 dB; SSIM: 0.538485; PSNR_Y: 26.697630 dB; SSIM_Y: 0.592564; LPIPS: 0.562129; DISTS: 0.243439
+24-12-29 23:38:36.757 - INFO: FID Score: 193.6084145103132

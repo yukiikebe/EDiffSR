@@ -1,0 +1,11 @@
+AID
+AID_test
+resize_Sentinel
+Sentinel
+results/sisr/Test-Sentinel-iter180000
+img
+results/sisr/ediffsr
+codes/config/sisr/sde_state/
+codes/data/__pycache__
+codes/config/sisr/__pycache__
+codes/config/sisr/models/__pycache__

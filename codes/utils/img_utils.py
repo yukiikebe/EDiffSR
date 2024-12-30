@@ -8,11 +8,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
 from torchvision.utils import make_grid
+from scipy.linalg import sqrtm
+from torchvision.models import inception_v3
+from DISTS_pytorch import DISTS
+from torch.nn.functional import adaptive_avg_pool2d
 
 try:
     import accimage
 except ImportError:
     accimage = None
+    
+import lpips
+# from ignite.metrics import FID
+# from ignite.metrics.gan.fid import fid_score
+# from torchmetrics.image.fid import FrechetInceptionDistance
 
 
 def _is_pil_image(img):
@@ -197,6 +206,10 @@ def ssim(img1, img2):
     img2 = img2.astype(np.float64)
     kernel = cv2.getGaussianKernel(11, 1.5)
     window = np.outer(kernel, kernel.transpose())
+    
+    # Validate slice dimensions to avoid empty slices
+    if img1.shape[0] <= 10 or img1.shape[1] <= 10:
+        raise ValueError("Input images are too small for SSIM calculation.")
 
     mu1 = cv2.filter2D(img1, -1, window)[5:-5, 5:-5]  # valid
     mu2 = cv2.filter2D(img2, -1, window)[5:-5, 5:-5]
@@ -207,9 +220,14 @@ def ssim(img1, img2):
     sigma2_sq = cv2.filter2D(img2 ** 2, -1, window)[5:-5, 5:-5] - mu2_sq
     sigma12 = cv2.filter2D(img1 * img2, -1, window)[5:-5, 5:-5] - mu1_mu2
 
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
-        (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
-    )
+    # ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
+    #     (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    # )
+    
+    numerator = (2 * mu1_mu2 + C1) * (2 * sigma12 + C2)
+    denominator = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    ssim_map = np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator != 0)
+
     return ssim_map.mean()
 
 
@@ -232,3 +250,134 @@ def calculate_ssim(img1, img2):
             return ssim(np.squeeze(img1), np.squeeze(img2))
     else:
         raise ValueError("Wrong input image dimensions.")
+
+# def calculate_fid(real_images, generated_images, device="cuda"):
+#     """
+#     Calculate the Fréchet Inception Distance (FID) between real and generated images.
+
+#     Args:
+#         real_images (np.ndarray or torch.Tensor): Real images with shape (N, H, W, C) or (H, W, C).
+#         generated_images (np.ndarray or torch.Tensor): Generated images with shape (N, H, W, C) or (H, W, C).
+#         device (str): Device to run the computation ("cpu" or "cuda").
+
+#     Returns:
+#         float: The FID score.
+#     """
+#     def preprocess_images(images):
+#         """Ensure images are in the correct shape and format."""
+#         if images.ndim == 3:  # Single image: (H, W, C)
+#             images = np.expand_dims(images, axis=0)  # Add batch dimension
+#         if isinstance(images, np.ndarray):
+#             images = torch.from_numpy(images).permute(0, 3, 1, 2).float() / 255.0  # Convert to (N, C, H, W)
+#         return images
+
+#     def get_activations(images, model, device):
+#         """Extract activations from the penultimate layer of InceptionV3."""
+#         with torch.no_grad():
+#             if images.shape[1] != 3:
+#                 raise ValueError("Input images must have 3 channels (RGB).")
+
+#             # Resize input images to (299, 299)
+#             images = F.interpolate(images, size=(299, 299), mode="bilinear", align_corners=False)
+
+#             # Pass through the InceptionV3 model
+#             features = model(images.to(device)).detach().cpu().numpy()  # Forward pass to get activations
+#         return features
+
+#     # Preprocess input images
+#     real_images = preprocess_images(real_images)
+#     generated_images = preprocess_images(generated_images)
+
+#     # Load pre-trained InceptionV3 model
+#     inception = inception_v3(pretrained=True, transform_input=False).to(device)
+#     inception.eval()
+
+#     # Calculate activations
+#     real_activations = get_activations(real_images, inception, device)
+#     generated_activations = get_activations(generated_images, inception, device)
+
+#     # Calculate mean and covariance
+#     eps = 1e-6
+#     mu_real, sigma_real = np.mean(real_activations, axis=0), np.cov(real_activations, rowvar=False) + eps * np.eye(real_activations.shape[1])
+#     mu_generated, sigma_generated = np.mean(generated_activations, axis=0), np.cov(generated_activations, rowvar=False) + eps * np.eye(generated_activations.shape[1])
+
+#     # Compute FID
+#     diff = mu_real - mu_generated
+#     covmean, _ = sqrtm(sigma_real.dot(sigma_generated), disp=False)
+#     if np.iscomplexobj(covmean):
+#         covmean = covmean.real
+#     fid = diff.dot(diff) + np.trace(sigma_real + sigma_generated - 2 * covmean)
+
+#     return fid
+
+def calculate_lpips(real_images, generated_images, device="cuda"):
+    """
+    Calculate the Learned Perceptual Image Patch Similarity (LPIPS) between real and generated images.
+
+    Args:
+        real_images (torch.Tensor): A batch of real images with shape (N, 3, H, W).
+        generated_images (torch.Tensor): A batch of generated images with shape (N, 3, H, W).
+        device (str): Device to run the computation ("cpu" or "cuda").
+
+    Returns:
+        float: The LPIPS score.
+    """
+    
+    # Add batch dimension if input is a single image
+    if real_images.ndim == 3:
+        real_images = np.expand_dims(real_images, axis=0)  # Shape (1, H, W, C)
+    if generated_images.ndim == 3:
+        generated_images = np.expand_dims(generated_images, axis=0)
+        
+    # Convert NumPy arrays to PyTorch tensors if needed
+    if isinstance(real_images, np.ndarray):
+        real_images = torch.from_numpy(real_images).permute(0, 3, 1, 2).float() / 255.0
+    if isinstance(generated_images, np.ndarray):
+        generated_images = torch.from_numpy(generated_images).permute(0, 3, 1, 2).float() / 255.0
+
+    # Load pre-trained LPIPS model
+    lpips_model = lpips.LPIPS(net="vgg").to(device)
+    lpips_model.eval()
+
+    # Calculate LPIPS
+    with torch.no_grad():
+        lpips_score = lpips_model(real_images.to(device), generated_images.to(device)).mean().item()
+    return lpips_score
+
+def calculate_dists(ref_images, deg_images, device="cuda"):
+    """
+    Calculate the DISTS (Deep Image Structure and Texture Similarity) metric.
+
+    Args:
+        ref_images (torch.Tensor): A batch of reference images with shape (N, 3, H, W).
+        deg_images (torch.Tensor): A batch of degraded images with shape (N, 3, H, W).
+        device (str): Device to run the computation ("cpu" or "cuda").
+
+    Returns:
+        torch.Tensor: The DISTS score for each image pair.
+    """
+    def preprocess_images(images):
+        """Ensure images are in the correct shape (N, C, H, W) as PyTorch tensors."""
+        if isinstance(images, np.ndarray):
+            if images.ndim == 3:  # Single image: (H, W, C)
+                images = np.expand_dims(images, axis=0)  # Add batch dimension: (1, H, W, C)
+            images = torch.from_numpy(images).permute(0, 3, 1, 2).float() / 255.0  # Convert to (N, C, H, W)
+        elif isinstance(images, torch.Tensor):
+            if images.ndim == 3:  # Single image: (C, H, W)
+                images = images.unsqueeze(0)  # Add batch dimension: (1, C, H, W)
+        else:
+            raise TypeError("Input images must be a NumPy array or a PyTorch tensor.")
+        return images
+
+    # Preprocess input images
+    ref_images = preprocess_images(ref_images)
+    deg_images = preprocess_images(deg_images)
+
+    # Initialize DISTS metric
+    dists_model = DISTS().to(device)
+    dists_model.eval()
+
+    # Compute DISTS
+    with torch.no_grad():
+        scores = dists_model(ref_images.to(device), deg_images.to(device))
+    return scores

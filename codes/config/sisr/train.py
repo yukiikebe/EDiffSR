@@ -43,7 +43,7 @@ def init_dist(backend="nccl", **kwargs):
 def main():
     #### setup options of three networks
     parser = argparse.ArgumentParser()
-    parser.add_argument("-opt", type=str, default="D:/EDiffSR/codes/config/sisr/options/setting.yml")
+    parser.add_argument("-opt", type=str, default="codes/config/sisr/options/train/setting.yml")
     parser.add_argument(
         "--launcher", choices=["none", "pytorch"], default="none", help="job launcher"  # none means disabled distributed training
     )

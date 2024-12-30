@@ -25,8 +25,8 @@ datasets:
     optimizer: AdamW # Adam, AdamW, Lion
     name: Train_Dataset
     mode: LQGT
-    dataroot_GT: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/Dataset/train/GT
-    dataroot_LQ: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/Dataset/train/LR
+    dataroot_GT: /ID_GT/train
+    dataroot_LQ: /AID_split/test
 #    dataroot_GT: D:/SISR/Dataset/train/GT
 #    dataroot_LQ: D:/SISR/Dataset/train/LR
 
@@ -41,8 +41,8 @@ datasets:
   val:
     name: Val_Dataset
     mode: LQGT
-    dataroot_GT: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/baseline/AID-tiny/GT
-    dataroot_LQ: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/baseline/AID-tiny/LR
+    dataroot_GT: AID_GT/val
+    dataroot_LQ: AID_split/valid
 #    dataroot_GT: D:/SISR/Dataset/train/GT
 #    dataroot_LQ: D:/SISR/Dataset/train/LR
 
@@ -58,8 +58,8 @@ network_G:
 
 #### path
 path:
-  #pretrain_model_G: /mnt/disk3/XY-SPACE/SISR/image-restoration-sde-main/experiments/sisr/10000_G.pth
-  pretrain_model_G: ~
+  pretrain_model_G: experiments/sisr/ediffsr/180000_G.pth
+  # pretrain_model_G: ~
   strict_load: true
   #resume_state: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/image-restoration-sde-main/codes/config/sisr/log/refusion/training_state/360000.state
   resume_state: ~
