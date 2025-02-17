@@ -5,6 +5,7 @@ from tqdm import tqdm
 import torchvision.utils as tvutils
 import os
 from scipy import integrate
+import tifffile
 
 
 class SDE(abc.ABC):
@@ -239,7 +240,12 @@ class IRSDE(SDE):
                 if t % interval == 0:
                     idx = t // interval
                     os.makedirs(save_dir, exist_ok=True)
-                    tvutils.save_image(x.data, f'{save_dir}/state_{idx}.png', normalize=False)
+                    
+                    if x.shape[1] > 3:
+                        tifffile.imwrite(f'{save_dir}/state_{idx}.tiff', x.data.squeeze().permute(1, 2, 0).cpu().numpy())
+                        # tifffile.imwrite(f'{save_dir}/state_{idx}.tiff', x.data.cpu().numpy())
+                    else:
+                        tvutils.save_image(x.data, f'{save_dir}/state_{idx}.png', normalize=False)
 
         return x
 

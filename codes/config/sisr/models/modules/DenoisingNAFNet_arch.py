@@ -237,6 +237,9 @@ class ConditionalNAFNet(nn.Module):
 
         B, C, H, W = x.shape
         x = self.check_image_size(x)
+        # print("x_shape:",x.shape)
+        # print(inp_res.shape)
+        # print(cond.shape)
 
         x = self.intro(x)
 

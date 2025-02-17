@@ -3,6 +3,7 @@ from PIL import Image
 from tqdm import tqdm
 
 def downsample_images(input_dir, output_dir, scale=0.25):
+# def downsample_images(input_dir, output_dir, scale=0.426666667):
     """
     Downsample images in each directory to a specified scale.
 
@@ -42,8 +43,8 @@ def downsample_images(input_dir, output_dir, scale=0.25):
                 print(f"Error processing {img_path}: {e}")
 
 # Define input and output directories
-input_dir = "./AID_sample/HR"
-output_dir = "./AID_sample/LR"
+input_dir = "./AID_train/dataset_HR/val"
+output_dir = "./AID_train/dataset_LR/val"
 
 # Downsample images to 1/4 of their original size
-downsample_images(input_dir, output_dir, scale=0.25)
+downsample_images(input_dir, output_dir)

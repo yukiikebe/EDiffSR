@@ -6,6 +6,7 @@ import random
 import cv2
 import numpy as np
 import torch
+import rasterio
 
 # Files & IO
 
@@ -77,11 +78,64 @@ def read_img(env, path, size=None):
         img = img[:, :, :3]
     return img
 
+###########################Add function
+def read_tif(path, normalize="minmax", size=None):
+    with rasterio.open(path) as src:
+        img = src.read()  # Shape: (C, H, W)
+
+    if img.shape[0] > 7:
+        img = img[:7, :, :]  # Remove the 8th channel (NIR)
+        
+    img = np.transpose(img, (1, 2, 0))  # Convert to (H, W, C)
+
+    if normalize == "minmax":  # Scale to [0,1]
+        if img.dtype == np.uint8:
+            img = img.astype(np.float32) / 255.0
+        elif img.dtype == np.uint16:
+            img = img.astype(np.float32) / 65535.0
+
+    elif normalize == "standardize":  # Zero mean, unit variance
+        mean = np.mean(img, axis=(0, 1))
+        std = np.std(img, axis=(0, 1)) + 1e-6
+        img = (img - mean) / std
+
+    elif normalize == "channelwise":  # Per-channel normalization
+        channel_means = [0.5, 0.5, 0.5, 0.6, 0.7, 0.8, 0.9]  
+        channel_stds = [0.2, 0.2, 0.2, 0.3, 0.3, 0.3, 0.4]   
+        for c in range(img.shape[2]):
+            img[:, :, c] = (img[:, :, c] - channel_means[c]) / channel_stds[c]
+
+    return img
+####################################
 
 # image processing
 # process on numpy image
 
-def augment(img, hflip=True, rot=True, mode=None, swap=None):
+####################################
+def adjust_brightness(image, alpha=1.0, beta=10):
+    return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+
+def add_blur(image, ksize=(3, 3)): # ksize shoould be odd number
+    return cv2.GaussianBlur(image, ksize, 0)
+
+def add_salt_and_pepper_noise(image, salt_prob=0.02, pepper_prob=0.02):
+    noisy_image = np.copy(image)
+    total_pixels = image.shape[0] * image.shape[1]
+    
+    # Salt noise
+    num_salt = int(total_pixels * salt_prob)
+    salt_coords = [np.random.randint(0, i - 1, num_salt) for i in image.shape[:2]]
+    noisy_image[salt_coords[0], salt_coords[1]] = 255
+    
+    # Pepper noise
+    num_pepper = int(total_pixels * pepper_prob)
+    pepper_coords = [np.random.randint(0, i - 1, num_pepper) for i in image.shape[:2]]
+    noisy_image[pepper_coords[0], pepper_coords[1]] = 0
+    
+    return noisy_image
+####################################
+
+def augment(img, hflip=True, rot=True, mode=None, swap=None, noise=True, bright=True, blur=True):
     # horizontal flip OR rotate
     hflip = hflip and random.random() < 0.5
     vflip = rot and random.random() < 0.5
@@ -94,6 +148,13 @@ def augment(img, hflip=True, rot=True, mode=None, swap=None):
             img = img[::-1, :, :]
         if rot90:
             img = img.transpose(1, 0, 2)
+            
+        if noise:
+            img = add_salt_and_pepper_noise(img)
+        if bright:
+            img = adjust_brightness(img)
+        if blur:
+            img = add_blur(img)
         return img
     if mode in ['LQ','GT', 'SRker']:
         return _augment(img)
@@ -103,7 +164,7 @@ def augment(img, hflip=True, rot=True, mode=None, swap=None):
         return [_augment(I) for I in img]
 
 
-def augment_flow(img_list, flow_list, hflip=True, rot=True):
+def augment_flow(img_list, flow_list, hflip=True, rot=True, noise=True, bright=True, blur=True):
     # horizontal flip OR rotate
     hflip = hflip and random.random() < 0.5
     vflip = rot and random.random() < 0.5
@@ -116,6 +177,12 @@ def augment_flow(img_list, flow_list, hflip=True, rot=True):
             img = img[::-1, :, :]
         if rot90:
             img = img.transpose(1, 0, 2)
+        if noise:
+            img = add_salt_and_pepper_noise(img)
+        if bright:
+            img = adjust_brightness(img)
+        if blur:
+            img = add_blur(img)
         return img
 
     def _augment_flow(flow):

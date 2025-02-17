@@ -5,7 +5,6 @@ import os
 import random
 import sys
 import copy
-
 import cv2
 import numpy as np
 import torch
@@ -47,6 +46,7 @@ def main():
     parser.add_argument(
         "--launcher", choices=["none", "pytorch"], default="none", help="job launcher"  # none means disabled distributed training
     )
+    parser.add_argument("--wandb", action="store_true", default=False)
     parser.add_argument("--local_rank", type=int, default=0)
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
@@ -57,6 +57,11 @@ def main():
     # choose small opt for SFTMD test, fill path of pre-trained model_F
     #### set random seed
     seed = opt["train"]["manual_seed"]
+    
+    if args.wandb:
+        import wandb
+        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_Multiband_flip_rot_scale16_calculation')
+        wandb.config.update(opt)
 
     #### distributed training settings
     if args.launcher == "none":  # disabled distributed training
@@ -243,15 +248,12 @@ def main():
 
             # random timestep and state (noisy map) via SDE
             timesteps, states = sde.generate_random_states(x0=GT, mu=LQ)  # t=batchsize，states [b 3 128 128]
-
             model.feed_data(states, LQ, GT)  # xt, mu, x0, 将加了噪声的LR图xt，LR以及GT输入改进的UNet进行去噪
 
             model.optimize_parameters(current_step, timesteps, sde)  # 优化UNet
-
             model.update_learning_rate(
                 current_step, warmup_iter=opt["train"]["warmup_iter"]
             )
-
             if current_step % opt["logger"]["print_freq"] == 0:
                 logs = model.get_current_log()
                 message = "<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> ".format(
@@ -265,6 +267,8 @@ def main():
                             tb_logger.add_scalar(k, v, current_step)
                 if rank <= 0:
                     logger.info(message)
+                    wandb_run.log({"epoch": epoch, "iter": current_step, "lr": model.get_current_learning_rate(), **logs})
+                    
 
             # validation, to produce ker_map_list(fake)
             if current_step % opt["train"]["val_freq"] == 0 and rank <= 0:
@@ -281,17 +285,25 @@ def main():
                     model.test(sde)
                     visuals = model.get_current_visuals()
 
-                    output = util.tensor2img(visuals["Output"].squeeze())  # uint8
-                    gt_img = util.tensor2img(visuals["GT"].squeeze())  # uint8
+                    print(visuals["Output"].shape)
+                    print(visuals["GT"].shape)
+                    
+                    if visuals["Output"].shape[0] == 7:
+                        output = visuals["Output"].squeeze().cpu().numpy()
+                        gt_img = visuals["GT"].squeeze().cpu().numpy()
+                        avg_psnr += util.calculate_psnr(output, gt_img)
+                    else:      
+                        output = util.tensor2img(visuals["Output"].squeeze())  # uint8
+                        gt_img = util.tensor2img(visuals["GT"].squeeze())  # uint8
 
-                    # save the validation results
-                    save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
-                    util.mkdirs(save_path)
-                    save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
-                    util.save_img(output, save_name)
+                        # save the validation results
+                        save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
+                        util.mkdirs(save_path)
+                        save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
+                        util.save_img(output, save_name)
 
-                    # calculate PSNR
-                    avg_psnr += util.calculate_psnr(output, gt_img)
+                        # calculate PSNR
+                        avg_psnr += util.calculate_psnr(output, gt_img)
                     idx += 1
 
                 avg_psnr = avg_psnr / idx
@@ -301,6 +313,7 @@ def main():
                     best_iter = current_step
 
                 # log
+                wandb_run.log({"epoch": epoch, "iter": current_step, "psnr": avg_psnr})
                 logger.info("# Validation # PSNR: {:.6f}, Best PSNR: {:.6f}| Iter: {}".format(avg_psnr, best_psnr, best_iter))
                 logger_val = logging.getLogger("val")  # validation logger
                 logger_val.info(

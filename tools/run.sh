@@ -1,9 +1,12 @@
 xhost +local:root
+export WANDB_API_KEY=60c883aff30a57af75e35c552172dbd07a2c9a2c
 
 docker run -it --entrypoint /bin/bash -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v /home/yuki/research/EDiffSR:/workspace \
-    -v /dev:/dev --privileged -p 6006:6006\
-    -e DISPLAY=$DISPLAY --gpus all yuki/super_resolution:latest
+    -e WANDB_API_KEY=$WANDB_API_KEY\
+    -e DISPLAY=$DISPLAY --gpus '"device=3"' yuki/super_resolution:latest
 
 
 # python train.py -opt=options/train/refusion.yml
+
+# --gpus '"device=2,3"'

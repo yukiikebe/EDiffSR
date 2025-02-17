@@ -88,7 +88,6 @@ class DenoisingModel(BaseModel):
                 )
             else:
                 print('Not implemented optimizer, default using Adam!')
-
             self.optimizers.append(self.optimizer)
 
             # schedulers
@@ -126,24 +125,18 @@ class DenoisingModel(BaseModel):
 
     def optimize_parameters(self, step, timesteps, sde=None):
         sde.set_mu(self.condition)
-
         self.optimizer.zero_grad()
-
         timesteps = timesteps.to(self.device)
-
         # Get noise and score
         noise = sde.noise_fn(self.state, timesteps.squeeze())
         score = sde.get_score_from_noise(noise, timesteps)
-
         # Learning the maximum likelihood objective for state x_{t-1}
         xt_1_expection = sde.reverse_sde_step_mean(self.state, score, timesteps)
         xt_1_optimum = sde.reverse_optimum_step(self.state, self.state_0, timesteps)
         loss = self.weight * self.loss_fn(xt_1_expection, xt_1_optimum)
-
         loss.backward()
         self.optimizer.step()
         self.ema.update()
-
         # set log
         self.log_dict["loss"] = loss.item()
 

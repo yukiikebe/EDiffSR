@@ -1,4 +1,5 @@
 AID
+AID_sample
 AID_test
 resize_Sentinel
 Sentinel
@@ -9,3 +10,26 @@ codes/config/sisr/sde_state/
 codes/data/__pycache__
 codes/config/sisr/__pycache__
 codes/config/sisr/models/__pycache__
+AID_split_matched/
+Orthophotos/
+Orthophotos_patches_png/
+Orthophotos_patches_png_scale16/
+Orthophotos_patches_png_scale16_split_ratio/
+Orthophotos_patches_png_split_ratio/
+Orthophotos_patches_tif_split_ratio/
+Orthophotos_patches_tiff/
+Orthophotos_patches_tiff_scale16/
+Orthophotos_patches_tiff_scale16_20_wholeimage/
+Orthophotos_patches_tiff_scale16_split_ratio/
+output.png
+output_jpgs/
+experiments/
+convert_png_to_jpg.py
+codes/config/sisr/train copy.py
+codes/config/sisr/wandb/
+convert_png_to_jpg.py
+results/sisr/
+resize_category.py
+VIndexCal.py
+altum-pt-blueberries-60m-sample-data.zip
+codes/config/sisr/log/

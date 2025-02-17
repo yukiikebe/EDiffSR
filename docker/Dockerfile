@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir \
     torchvision \
     tqdm \
     scikit-learn \
-    opencv-python-headless \
     pandas \
     matplotlib \
     tensorboard \
@@ -26,6 +25,21 @@ RUN pip install --no-cache-dir \
     einops \
     DISTS-pytorch \
     pytorch_fid \
+    wandb 
+RUN pip install --no-cache-dir opencv-python
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=America/Texas
+
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    libgtk2.0-dev \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 
 # Optionally, you can copy your application code into the image

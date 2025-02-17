@@ -251,65 +251,6 @@ def calculate_ssim(img1, img2):
     else:
         raise ValueError("Wrong input image dimensions.")
 
-# def calculate_fid(real_images, generated_images, device="cuda"):
-#     """
-#     Calculate the Fréchet Inception Distance (FID) between real and generated images.
-
-#     Args:
-#         real_images (np.ndarray or torch.Tensor): Real images with shape (N, H, W, C) or (H, W, C).
-#         generated_images (np.ndarray or torch.Tensor): Generated images with shape (N, H, W, C) or (H, W, C).
-#         device (str): Device to run the computation ("cpu" or "cuda").
-
-#     Returns:
-#         float: The FID score.
-#     """
-#     def preprocess_images(images):
-#         """Ensure images are in the correct shape and format."""
-#         if images.ndim == 3:  # Single image: (H, W, C)
-#             images = np.expand_dims(images, axis=0)  # Add batch dimension
-#         if isinstance(images, np.ndarray):
-#             images = torch.from_numpy(images).permute(0, 3, 1, 2).float() / 255.0  # Convert to (N, C, H, W)
-#         return images
-
-#     def get_activations(images, model, device):
-#         """Extract activations from the penultimate layer of InceptionV3."""
-#         with torch.no_grad():
-#             if images.shape[1] != 3:
-#                 raise ValueError("Input images must have 3 channels (RGB).")
-
-#             # Resize input images to (299, 299)
-#             images = F.interpolate(images, size=(299, 299), mode="bilinear", align_corners=False)
-
-#             # Pass through the InceptionV3 model
-#             features = model(images.to(device)).detach().cpu().numpy()  # Forward pass to get activations
-#         return features
-
-#     # Preprocess input images
-#     real_images = preprocess_images(real_images)
-#     generated_images = preprocess_images(generated_images)
-
-#     # Load pre-trained InceptionV3 model
-#     inception = inception_v3(pretrained=True, transform_input=False).to(device)
-#     inception.eval()
-
-#     # Calculate activations
-#     real_activations = get_activations(real_images, inception, device)
-#     generated_activations = get_activations(generated_images, inception, device)
-
-#     # Calculate mean and covariance
-#     eps = 1e-6
-#     mu_real, sigma_real = np.mean(real_activations, axis=0), np.cov(real_activations, rowvar=False) + eps * np.eye(real_activations.shape[1])
-#     mu_generated, sigma_generated = np.mean(generated_activations, axis=0), np.cov(generated_activations, rowvar=False) + eps * np.eye(generated_activations.shape[1])
-
-#     # Compute FID
-#     diff = mu_real - mu_generated
-#     covmean, _ = sqrtm(sigma_real.dot(sigma_generated), disp=False)
-#     if np.iscomplexobj(covmean):
-#         covmean = covmean.real
-#     fid = diff.dot(diff) + np.trace(sigma_real + sigma_generated - 2 * covmean)
-
-#     return fid
-
 def calculate_lpips(real_images, generated_images, device="cuda"):
     """
     Calculate the Learned Perceptual Image Patch Similarity (LPIPS) between real and generated images.

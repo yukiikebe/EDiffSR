@@ -1,5 +1,5 @@
 # name: Test-AID-iter200000
-name: Test-AID-iter180000
+name: Test-AID-farm-iter370000
 # name : Test-Sentinel-test-iter180000
 suffix: ~  # add suffix to saved images
 model: denoising
@@ -22,8 +22,7 @@ degradation:
 
 #### path
 path:
-  pretrain_model_G: ../../../experiments/sisr/ediffsr/180000_G.pth
-  # pretrain_model_G: ../../../experiments/sisr/ediffsr_retrain/models/200000_G.pth
+  pretrain_model_G: ../../../experiments/sisr/ediffsr_retrain_farm/models/370000_G.pth
   
 datasets:
   # test1:
@@ -46,8 +45,8 @@ datasets:
   test 1:
     name: AID
     mode: LQGT
-    dataroot_GT: /workspace/AID_split_matched/HR/test
-    dataroot_LQ: /workspace/AID_split_matched/LR/test
+    dataroot_GT: /workspace/Orthophotos_patches_png_split_ratio/HR/test
+    dataroot_LQ: /workspace/Orthophotos_patches_png_split_ratio/LR/test
  
 #### network structures
 network_G:

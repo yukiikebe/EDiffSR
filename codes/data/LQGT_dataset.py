@@ -27,6 +27,10 @@ class LQGTDataset(data.Dataset):
         self.LR_paths, self.GT_paths = None, None
         self.LR_env, self.GT_env = None, None  # environment for lmdb
         self.LR_size, self.GT_size = opt["LR_size"], opt["GT_size"]
+        
+        #############
+        self.img_channel = opt["img_channel"]
+        #############
 
         # read image list from lmdb or image files
         if opt["data_type"] == "lmdb":
@@ -87,10 +91,21 @@ class LQGTDataset(data.Dataset):
             resolution = [int(s) for s in self.GT_sizes[index].split("_")]
         else:
             resolution = None
-        img_GT = util.read_img(
+        
+        ########################################
+        if self.img_channel == 7:
+            img_GT = util.read_tif(GT_path)
+        else:
+            img_GT = util.read_img(
             self.GT_env, GT_path, resolution
         )  # return: Numpy float32, HWC, BGR, [0,1]
-
+        ########################################
+        
+        ########################################
+        if img_GT.shape[2] != self.img_channel:
+            raise ValueError(f"Expected {self.img_channel} bands, but got {img_GT.shape[2]} in {GT_path}")
+        ########################################
+        
         # modcrop in the validation / test phase
         if self.opt["phase"] != "train":
             img_GT = util.modcrop(img_GT, scale)
@@ -102,7 +117,10 @@ class LQGTDataset(data.Dataset):
                 resolution = [int(s) for s in self.LR_sizes[index].split("_")]
             else:
                 resolution = None
-            img_LR = util.read_img(self.LR_env, LR_path, resolution)
+            if self.img_channel == 7:
+                img_LR = util.read_tif(LR_path)
+            else:
+                img_LR = util.read_img(self.LR_env, LR_path, resolution)
         else:  # down-sampling on-the-fly
             # randomly scale during training
             if self.opt["phase"] == "train":
@@ -142,13 +160,16 @@ class LQGTDataset(data.Dataset):
                 rnd_h_GT : rnd_h_GT + GT_size, rnd_w_GT : rnd_w_GT + GT_size, :
             ]
 
-            # augmentation - flip, rotate
+            # augmentation - flip, rotate, etc.
             img_LR, img_GT = util.augment(
                 [img_LR, img_GT],
                 self.opt["use_flip"],
                 self.opt["use_rot"],
                 self.opt["mode"],
                 self.opt["use_swap"],
+                self.opt["use_noise"],
+                self.opt["use_bright"],
+                self.opt["use_blur"],
             )
         elif LR_size is not None:
             H, W, C = img_LR.shape
@@ -163,6 +184,20 @@ class LQGTDataset(data.Dataset):
                 img_GT = img_GT[
                     rnd_h_GT : rnd_h_GT + GT_size, rnd_w_GT : rnd_w_GT + GT_size, :
                 ]
+                
+                ############################### tmp
+                # if self.opt["phase"] == "val":
+                #     img_LR, img_GT = util.augment(
+                #         [img_LR, img_GT],
+                #         self.opt["use_flip"],
+                #         self.opt["use_rot"],
+                #         self.opt["mode"],
+                #         self.opt["use_swap"],
+                #         self.opt["use_noise"],
+                #         self.opt["use_bright"],
+                #         self.opt["use_blur"],
+                #     )
+                ###############################
 
         # change color space if necessary
         if self.opt["color"]:
