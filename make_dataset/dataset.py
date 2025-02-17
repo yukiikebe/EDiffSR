@@ -9,7 +9,30 @@ import random
 from random import randrange
 from tqdm import tqdm
 import rasterio
+import cv2
 from rasterio.enums import Resampling
+
+def adjust_brightness(image, alpha=1.0, beta=10):
+    return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+
+def add_blur(image, ksize=(3, 3)): # ksize shoould be odd number
+    return cv2.GaussianBlur(image, ksize, 0)
+
+def add_salt_and_pepper_noise(image, salt_prob=0.02, pepper_prob=0.02):
+    noisy_image = np.copy(image)
+    total_pixels = image.shape[0] * image.shape[1]
+    
+    # Salt noise
+    num_salt = int(total_pixels * salt_prob)
+    salt_coords = [np.random.randint(0, i - 1, num_salt) for i in image.shape[:2]]
+    noisy_image[salt_coords[0], salt_coords[1]] = 255
+    
+    # Pepper noise
+    num_pepper = int(total_pixels * pepper_prob)
+    pepper_coords = [np.random.randint(0, i - 1, num_pepper) for i in image.shape[:2]]
+    noisy_image[pepper_coords[0], pepper_coords[1]] = 0
+    
+    return noisy_image
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in [".png", ".jpg", ".jpeg"])
@@ -237,11 +260,21 @@ def create_resized_patches_from_tiff(input_dir, output_dir, option=2, patch_size
                             png_path = os.path.join(hr_dir_farmland, f"{patch_count:04d}.png")
                             patch_img = Image.fromarray(patch.astype('uint8'), 'RGB')  # Convert to PIL image
                             patch_img.save(png_path)
+                            noisy_patch = add_salt_and_pepper_noise(patch, salt_prob=0.005, pepper_prob=0.005)
+                            noisy_patch_img = Image.fromarray(noisy_patch.astype('uint8'), 'RGB')
+                            noisy_patch_img.save(os.path.join(hr_dir_farmland, f"{patch_count:04d}_noise.png"))
+                            bright_patch = adjust_brightness(patch, alpha=1.1, beta=0)
+                            bright_patch_img = Image.fromarray(bright_patch.astype('uint8'), 'RGB')
+                            bright_patch_img.save(os.path.join(hr_dir_farmland, f"{patch_count:04d}_bright.png"))
                             
                             lr_patch = rescale_img(patch_img, scale=1/scale)
                             # Save LR patch
                             output_lr = os.path.join(lr_dir_farmland, f"{patch_count:04d}.png")
                             lr_patch.save(output_lr, format='PNG')
+                            noisy_lr_patch = rescale_img(noisy_patch_img, scale=1/scale)
+                            noisy_lr_patch.save(os.path.join(lr_dir_farmland, f"{patch_count:04d}_noise.png"), format='PNG')
+                            bright_lr_patch = rescale_img(bright_patch_img, scale=1/scale)
+                            bright_lr_patch.save(os.path.join(lr_dir_farmland, f"{patch_count:04d}_bright.png"), format='PNG')
 
                         patch_count += 1
 
@@ -367,6 +400,81 @@ def create_resized_tiff_patches_from_tiff(input_dir, output_dir, patch_size=256,
         # break
     print(f"Extracted {patch_count} patches to {output_dir}")
 
+def merge_patches(hr_dir, output_tiff_path, output_png_path, patch_size=256, overlap=0.5):
+    """
+    Merge high-resolution (HR) patches back into a single image and save as TIFF and PNG.
+
+    Args:
+        hr_dir (str): Path to the directory containing HR patches.
+        output_tiff_path (str): Output file path for the merged image in TIFF format.
+        output_png_path (str): Output file path for debugging in PNG format.
+        patch_size (int): Size of each patch (default: 256).
+        overlap (float): Overlap percentage (default: 0.5).
+    """
+    
+    patch_files = sorted([f for f in os.listdir(hr_dir) if f.endswith(".tif")])
+    num_patches = len(patch_files)
+    
+    if num_patches == 0:
+        print("No patches found in the directory.")
+        return
+
+    # Read the first patch to get dimensions and metadata
+    first_patch_path = os.path.join(hr_dir, patch_files[0])
+    with rasterio.open(first_patch_path) as first_patch:
+        num_bands = first_patch.count
+        patch_profile = first_patch.profile  # Metadata
+        patch_dtype = first_patch.dtypes[0]  # Data type of images
+
+    # Determine the number of patches per row and column
+    step = int(patch_size * (1 - overlap))
+    width_patches = int(np.sqrt(num_patches))  # Assuming square grid
+    height_patches = width_patches
+
+    img_width = (width_patches - 1) * step + patch_size
+    img_height = (height_patches - 1) * step + patch_size
+
+    # Initialize an empty array for the merged image
+    merged_image = np.zeros((img_height, img_width, num_bands), dtype=patch_dtype)
+
+    # Place patches in correct locations
+    patch_index = 0
+    for i in range(height_patches):
+        for j in range(width_patches):
+            if patch_index >= num_patches:
+                break
+
+            patch_path = os.path.join(hr_dir, patch_files[patch_index])
+            with rasterio.open(patch_path) as patch:
+                patch_data = patch.read()
+                patch_data = np.moveaxis(patch_data, 0, -1)  # Convert from (bands, H, W) to (H, W, bands)
+
+            y, x = i * step, j * step  # Top-left corner position of the patch
+            merged_image[y:y + patch_size, x:x + patch_size, :] = patch_data
+            patch_index += 1
+
+    # Save the merged image as TIFF
+    patch_profile.update(
+        height=img_height, 
+        width=img_width, 
+        transform=None  # Update this if geospatial data is needed
+    )
+
+    with rasterio.open(output_tiff_path, 'w', **patch_profile) as dst:
+        for band in range(num_bands):
+            dst.write(merged_image[:, :, band], band + 1)
+
+    print(f"Merged image saved at {output_tiff_path}")
+
+    # Convert to PNG for debugging
+    if num_bands >= 3:
+        png_image = cv2.cvtColor(merged_image[:, :, :3], cv2.COLOR_RGB2BGR)  # Convert RGB to BGR for OpenCV
+    else:
+        png_image = merged_image[:, :, 0]  # If single channel, use grayscale
+
+    cv2.imwrite(output_png_path, png_image)
+    print(f"Debug PNG image saved at {output_png_path}")
+    
 class DatasetFromFolder(data.Dataset):
     def __init__(self, HR_dir, LR_dir, patch_size, upscale_factor, data_augmentation, transform=None):
         super(DatasetFromFolder, self).__init__()
@@ -434,11 +542,16 @@ def main():
     # create_resized_patches(input_dir, hr_dir, lr_dir)
     
     input_dir = "../Orthophotos"
-    output_dir = "../Orthophotos_patches_tiff_scale16_20_wholeimage"
-    # output_dir = "../Orthophotos_patches_png_scale16"
-    # create_resized_patches_from_tiff(input_dir, output_dir, scale=16) # make png images
-    create_resized_tiff_patches_from_tiff(input_dir, output_dir ,scale=16) # make tif images
+    # input_dir = "../results/sisr/Test-AID-farm-multiband-fliprot-iter500000-wholeimage20/AID"
+    # output_dir = "../Orthophotos_patches_tiff_scale16_20_wholeimage"
+    output_dir = "../Orthophotos_patches_png_scale16_noise"
+    # output_dir = "../Orthophotos_patches_tiff_scale16_combine_20"
+    # if not os.path.exists(output_dir):
+    #     os.makedirs(output_dir, exist_ok=True)
+    create_resized_patches_from_tiff(input_dir, output_dir, scale=16) # make png images
+    # create_resized_tiff_patches_from_tiff(input_dir, output_dir ,scale=16) # make tif images
     #no overlap and doesn't exclude black patches
     # create_resized_tiff_patches_from_tiff(input_dir, output_dir, scale=16, overlap=0, black_threshold=0, max_black_ratio=1.0)
+    # merge_patches(input_dir, output_dir + "/merged_farmland.tif", output_dir + "/merged_farmland.png")
     
 main()
