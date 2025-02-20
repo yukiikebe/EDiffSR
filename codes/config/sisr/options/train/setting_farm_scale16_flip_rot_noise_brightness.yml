@@ -1,5 +1,5 @@
 #### general settings
-name: re_ediffsr_train_farm_with_noise
+name: ediffsr_train_farm_with_flip_rot_noise_brighness
 use_tb_logger: true
 model: denoising
 distortion: sr
@@ -35,9 +35,9 @@ datasets:
     batch_size: 2
     GT_size: 256
     LR_size: 16
-    use_flip: False
-    use_rot: False
-    use_noise: True
+    use_flip: True
+    use_rot: True
+    use_noise:False
     use_bright: True
     use_blur: False
     color: RGB

@@ -150,72 +150,98 @@ for test_loader in test_loaders:
         SR_img = visuals["Output"]
         output = SR_img
     
-        output = util.tensor2img(SR_img.squeeze())  # uint8
-        LQ_ = util.tensor2img(visuals["Input"].squeeze())  
-        HR_ = util.tensor2img(visuals["GT"].squeeze())  
-        print(f"Type of output: {type(output)}")
-        # calculate PSNR and SSIM
-        if need_GT:
-            # GT = util.tensor2img(GT.squeeze())
-            GT = util.tensor2img(visuals["GT"].squeeze())
-            print("shape", output.shape)
-            print("shape", GT.shape)
-            psnr = util.calculate_psnr(output, GT)
-            ssim = util.calculate_ssim(output, GT)
-            psnr_y = util.calculate_psnr(bgr2ycbcr(output), bgr2ycbcr(GT))
-            ssim_y = util.calculate_ssim(bgr2ycbcr(output), bgr2ycbcr(GT))
-            # lpips = util.calculate_lpips(output, GT)
-            output_tensor = visuals["Output"].unsqueeze(0).to(device) if visuals["Output"].ndimension() == 3 else visuals["Output"].to(device)
-            HR_tensor = visuals["GT"].unsqueeze(0).to(device) if visuals["GT"].ndimension() == 3 else visuals["GT"].to(device)
-            
-            # dists = util.calculate_dists(GT, GT)
-            test_results["psnr"].append(psnr)
-            test_results["ssim"].append(ssim)
-            test_results["psnr_y"].append(psnr_y)
-            test_results["ssim_y"].append(ssim_y)
-            
-            dists = DISTS()
-            dists = dists.cuda()
-            dists_score = dists(output_tensor, HR_tensor)
-            test_results["DISTS"].append(dists_score.item())
-            
-            loss_fn_vgg = lpips.LPIPS(net="vgg").to(device)
-            mean = [0.5, 0.5, 0.5]
-            std = [0.5, 0.5, 0.5]
-            normalize(HR_tensor, mean, std, inplace=True)
-            normalize(output_tensor, mean, std, inplace=True)
-            lpips_score = loss_fn_vgg(output_tensor, HR_tensor)
-            test_results["lpips"].append(lpips_score.item())
-            
-            
-            logger.info(
-                "{:3d} - {:25} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; LPIPS: {:.6f}; DISTS: {:.6f}".format(
-                    i + 1, img_name, psnr, ssim, psnr_y, ssim_y, lpips_score.item(), dists_score.item()
-                )
-            )
-        else:
-            logger.info("{:3d} - {:25}".format(i + 1, img_name))
+        # output = util.tensor2img(SR_img.squeeze())  # uint8
+        # LQ_ = util.tensor2img(visuals["Input"].squeeze())  
+        # HR_ = util.tensor2img(visuals["GT"].squeeze())  
+        # print(f"Type of output: {type(output)}")
         
-        # average the results
-        if (i + 1) % 10 == 0:
-            ave_psnr = sum(test_results["psnr"]) / len(test_results["psnr"])
-            ave_ssim = sum(test_results["ssim"]) / len(test_results["ssim"])
-            ave_psnr_y = sum(test_results["psnr_y"]) / len(test_results["psnr_y"])
-            ave_ssim_y = sum(test_results["ssim_y"]) / len(test_results["ssim_y"])
-            ave_lpips = sum(test_results["lpips"]) / len(test_results["lpips"])
-            ave_dists = sum(test_results["DISTS"]) / len(test_results["DISTS"])
-            logger.info(
-                "Average: PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; LPIPS: {:.6f}; DISTS: {:.6f}".format(
-                    ave_psnr, ave_ssim, ave_psnr_y, ave_ssim_y, ave_lpips, ave_dists
-                )
-            )
+        # # calculate PSNR and SSIM
+        # if need_GT:
+        #     # GT = util.tensor2img(GT.squeeze())
+        #     GT = util.tensor2img(visuals["GT"].squeeze())
+        #     psnr = util.calculate_psnr(output, GT)
+        #     ssim = util.calculate_ssim(output, GT)
+        #     psnr_y = util.calculate_psnr(bgr2ycbcr(output), bgr2ycbcr(GT))
+        #     ssim_y = util.calculate_ssim(bgr2ycbcr(output), bgr2ycbcr(GT))
+        #     # lpips = util.calculate_lpips(output, GT)
+        #     output_tensor = visuals["Output"].unsqueeze(0).to(device) if visuals["Output"].ndimension() == 3 else visuals["Output"].to(device)
+        #     HR_tensor = visuals["GT"].unsqueeze(0).to(device) if visuals["GT"].ndimension() == 3 else visuals["GT"].to(device)
+            
+        #     # dists = util.calculate_dists(GT, GT)
+        #     test_results["psnr"].append(psnr)
+        #     test_results["ssim"].append(ssim)
+        #     test_results["psnr_y"].append(psnr_y)
+        #     test_results["ssim_y"].append(ssim_y)
+            
+        #     dists = DISTS()
+        #     dists = dists.cuda()
+        #     dists_score = dists(output_tensor, HR_tensor)
+        #     test_results["DISTS"].append(dists_score.item())
+            
+        #     loss_fn_vgg = lpips.LPIPS(net="vgg").to(device)
+        #     mean = [0.5, 0.5, 0.5]
+        #     std = [0.5, 0.5, 0.5]
+        #     normalize(HR_tensor, mean, std, inplace=True)
+        #     normalize(output_tensor, mean, std, inplace=True)
+        #     lpips_score = loss_fn_vgg(output_tensor, HR_tensor)
+        #     test_results["lpips"].append(lpips_score.item())
+            
+            
+        #     logger.info(
+        #         "{:3d} - {:25} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; LPIPS: {:.6f}; DISTS: {:.6f}".format(
+        #             i + 1, img_name, psnr, ssim, psnr_y, ssim_y, lpips_score.item(), dists_score.item()
+        #         )
+        #     )
+        # else:
+        #     logger.info("{:3d} - {:25}".format(i + 1, img_name))
+        
+        # # average the results
+        # if (i + 1) % 10 == 0:
+        #     ave_psnr = sum(test_results["psnr"]) / len(test_results["psnr"])
+        #     ave_ssim = sum(test_results["ssim"]) / len(test_results["ssim"])
+        #     ave_psnr_y = sum(test_results["psnr_y"]) / len(test_results["psnr_y"])
+        #     ave_ssim_y = sum(test_results["ssim_y"]) / len(test_results["ssim_y"])
+        #     ave_lpips = sum(test_results["lpips"]) / len(test_results["lpips"])
+        #     ave_dists = sum(test_results["DISTS"]) / len(test_results["DISTS"])
+        #     logger.info(
+        #         "Average: PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; LPIPS: {:.6f}; DISTS: {:.6f}".format(
+        #             ave_psnr, ave_ssim, ave_psnr_y, ave_ssim_y, ave_lpips, ave_dists
+        #         )
+        #     )
         
         suffix = opt["suffix"]
+        print(f"Output shape: {output.shape}")
+        # output_np = output.cpu().numpy()
+        # print("shape", output_np.shape)
         
-        # output_img = util.tensor2img(output.squeeze())  # Convert tensor to image
-        # output_img = Image.fromarray(output_img)  # Convert NumPy array to PIL image
-        # output_img.save(os.path.join(dataset_dir, f"{img_name}_1.png"))
-        # print("shape", output.shape)
+        # if output_np.shape[0] == 7:
+        #     output_np = np.moveaxis(output_np, 0, -1)
+        #     save_img_path = os.path.join(dataset_dir, img_name + ".tif")
+        #     print("shape", output_np.shape)
+        #     if output_np.dtype != np.uint16:
+        #         output_np = output_np.astype(np.uint16)
+        #     with rasterio.open(
+        #         save_img_path,
+        #         'w',
+        #         driver='GTiff',
+        #         height=output_np.shape[0],
+        #         width=output_np.shape[1],
+        #         count=output_np.shape[2],
+        #         dtype=output_np.dtype
+        #         ) as dst:
+        #         for band in range(output_np.shape[2]):
+        #             dst.write(output_np[:, :, band], band + 1)
+                
+        #     # Extract RGB bands (assuming they are the first three bands)
+        #     rgb_image = output_np[:, :, :3]
+        #     rgb_image = Image.fromarray(rgb_image.astype(np.uint8))
+        #     rgb_save_path = os.path.join(dataset_dir, img_name + "_RGB.png")
+        #     rgb_image.save(rgb_save_path)
+        
+        output_img = util.tensor2img(output.squeeze())  # Convert tensor to image
+        output_img = Image.fromarray(output_img)  # Convert NumPy array to PIL image
+        output_img.save(os.path.join(dataset_dir, f"{img_name}_1.png"))
+        print("shape", output.shape)
         output_np = output.cpu().numpy()
         print("dtype", output_np.dtype)
         if output_np.shape[0] == 7:
@@ -251,40 +277,46 @@ for test_loader in test_loaders:
 
                 img_rgb = Image.fromarray(output_np, 'RGB')
                 img_rgb.save(os.path.join(dataset_dir, img_name + ".png"))
+            # output_np = np.transpose(output_np, (1, 2, 0))
+            # img_rgb = Image.fromarray(output_np.astype(np.uint8), 'RGB')
+            # print("shape", output_np.shape)
+            # img_rgb.save(save_img_path_png)
         else:
             if suffix:
                 save_img_path = os.path.join(dataset_dir, img_name + suffix + ".png")
             else:
+                output_np = np.moveaxis(output_np, 0, -1)
+                output_np = (output_np * 255).round().clip(0, 255).astype(np.uint8)
                 save_img_path = os.path.join(dataset_dir, img_name + ".png")
-            util.save_img(output, save_img_path)
+            util.save_img(output_np, save_img_path)
 
-        if need_GT:
-            hr_fid_dir = os.path.join(dataset_dir, 'fid_HR')
-            sr_fid_dir = os.path.join(dataset_dir, 'fid_SR')
+        # if need_GT:
+        #     hr_fid_dir = os.path.join(dataset_dir, 'fid_HR')
+        #     sr_fid_dir = os.path.join(dataset_dir, 'fid_SR')
             
-            if os.path.exists(hr_fid_dir):
-                shutil.rmtree(hr_fid_dir)  # Remove existing directory
-            os.makedirs(hr_fid_dir, exist_ok=True)
+        #     if os.path.exists(hr_fid_dir):
+        #         shutil.rmtree(hr_fid_dir)  # Remove existing directory
+        #     os.makedirs(hr_fid_dir, exist_ok=True)
 
-            if os.path.exists(sr_fid_dir):
-                shutil.rmtree(sr_fid_dir)  # Remove existing directory
-            os.makedirs(sr_fid_dir, exist_ok=True)
+        #     if os.path.exists(sr_fid_dir):
+        #         shutil.rmtree(sr_fid_dir)  # Remove existing directory
+        #     os.makedirs(sr_fid_dir, exist_ok=True)
             
-            hr_save_path = os.path.join(hr_fid_dir, f'{img_name}.png')
-            print(f"HR Save Path: {hr_save_path}")
-            sr_save_path = os.path.join(sr_fid_dir, f'{img_name}.png')
-            print(f"SR Save Path: {sr_save_path}")
+            # hr_save_path = os.path.join(hr_fid_dir, f'{img_name}.png')
+            # print(f"HR Save Path: {hr_save_path}")
+            # sr_save_path = os.path.join(sr_fid_dir, f'{img_name}.png')
+            # print(f"SR Save Path: {sr_save_path}")
             # Save GT and SR images
-            save_preprocessed_image(HR_, hr_save_path)
-            save_preprocessed_image(output, sr_save_path)
+            # save_preprocessed_image(HR_, hr_save_path)
+            # save_preprocessed_image(output, sr_save_path)
             
-            fid_value = fid_score.calculate_fid_given_paths(
-                [hr_fid_dir, sr_fid_dir],  # Directories containing GT and SR images
-                batch_size=50,             # Adjust based on your GPU memory
-                device='cuda:0',           # Use GPU if available
-                dims=2048                  # Standard FID Inception feature dimensions
-            )
-            logger.info(f"FID Score: {fid_value}")
-            print(f"FID Score: {fid_value}")
+            # fid_value = fid_score.calculate_fid_given_paths(
+            #     [hr_fid_dir, sr_fid_dir],  # Directories containing GT and SR images
+            #     batch_size=50,             # Adjust based on your GPU memory
+            #     device='cuda:0',           # Use GPU if available
+            #     dims=2048                  # Standard FID Inception feature dimensions
+            # )
+            # logger.info(f"FID Score: {fid_value}")
+            # print(f"FID Score: {fid_value}")
         
     print(f"average test time: {np.mean(test_times):.4f}")

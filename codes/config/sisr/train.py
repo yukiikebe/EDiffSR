@@ -60,7 +60,7 @@ def main():
     
     if args.wandb:
         import wandb
-        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_Multiband_flip_rot_scale16_calculation')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGB_flip_rot_noise_brightness_scale16')
         wandb.config.update(opt)
 
     #### distributed training settings
@@ -279,7 +279,9 @@ def main():
                     LQ, GT = val_data["LQ"], val_data["GT"]
                     LQ = util.upscale(LQ, scale)
                     noisy_state = sde.noise_state(LQ)  # 在LR上加噪声，得到噪声LR图，噪声是随机生成的
-
+                    if not os.path.exists("/workspace/tmp"):
+                        os.makedirs("/workspace/tmp")
+                    
                     # valid Predictor
                     model.feed_data(noisy_state, LQ, GT)
                     model.test(sde)

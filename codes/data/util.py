@@ -112,7 +112,7 @@ def read_tif(path, normalize="minmax", size=None):
 # process on numpy image
 
 ####################################
-def adjust_brightness(image, alpha=1.0, beta=10):
+def adjust_brightness(image, alpha=1.0, beta=0):
     return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
 
 def add_blur(image, ksize=(3, 3)): # ksize shoould be odd number
@@ -148,11 +148,16 @@ def augment(img, hflip=True, rot=True, mode=None, swap=None, noise=True, bright=
             img = img[::-1, :, :]
         if rot90:
             img = img.transpose(1, 0, 2)
-            
         if noise:
-            img = add_salt_and_pepper_noise(img)
+            if img.shape[:2] == (16, 16): # same as LR image size
+                img = add_salt_and_pepper_noise(img)
+                salt = random.uniform(0.005, 0.01)
+                papper = random.uniform(0.005, 0.01)
+                img = add_salt_and_pepper_noise(img, salt, papper)
         if bright:
-            img = adjust_brightness(img)
+            alpha = random.uniform(-1.5, 1.5)
+            img = adjust_brightness(img, alpha=alpha)
+            
         if blur:
             img = add_blur(img)
         return img
@@ -178,9 +183,12 @@ def augment_flow(img_list, flow_list, hflip=True, rot=True, noise=True, bright=T
         if rot90:
             img = img.transpose(1, 0, 2)
         if noise:
-            img = add_salt_and_pepper_noise(img)
+            salt_prob = random.uniform(0.01, 0.05)
+            pepper_prob = random.uniform(0.01, 0.05)
+            img = add_salt_and_pepper_noise(img, salt_prob, pepper_prob)
         if bright:
-            img = adjust_brightness(img)
+            alpha = random.uniform(-1.5, 1.5)
+            img = adjust_brightness(img, alpha=alpha)
         if blur:
             img = add_blur(img)
         return img

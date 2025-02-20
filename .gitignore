@@ -21,6 +21,11 @@ Orthophotos_patches_tiff/
 Orthophotos_patches_tiff_scale16/
 Orthophotos_patches_tiff_scale16_20_wholeimage/
 Orthophotos_patches_tiff_scale16_split_ratio/
+Orthophotos_patches_png_scale16_20_wholeimage/
+Orthophotos_patches_png_scale16_combine_20/
+Orthophotos_patches_png_scale16_noise/
+Orthophotos_patches_tiff_scale16_combine_20/
+Orthophotos_patches_tiff_scale16_combine_20_SR/
 output.png
 output_jpgs/
 experiments/
