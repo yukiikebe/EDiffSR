@@ -25,7 +25,10 @@ RUN pip install --no-cache-dir \
     einops \
     DISTS-pytorch \
     pytorch_fid \
-    wandb 
+    wandb \
+    rasterio \
+    tifffile
+    
 RUN pip install --no-cache-dir opencv-python
 
 ENV DEBIAN_FRONTEND=noninteractive \

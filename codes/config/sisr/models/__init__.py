@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger("base")
 
 
-def create_model(opt):
+def create_model(opt, wandb_run=None):
     model = opt["model"]
 
     if model == "denoising":

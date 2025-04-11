@@ -1,5 +1,5 @@
 # name: Test-AID-iter200000
-name: Test-AID-farm-RGB-fliprot-iter475000
+name: Test-AID-farm-RGB-fliprot-brightness-iter475000
 # name : Test-Sentinel-test-iter180000
 suffix: ~  # add suffix to saved images
 model: denoising
@@ -22,7 +22,7 @@ degradation:
 
 #### path
 path:
-  pretrain_model_G: ../../../experiments/sisr/ediffsr_train_farm_with_flip_rot/models/475000_G.pth
+  pretrain_model_G: ../../../experiments/sisr/ediffsr_train_farm_with_flip_rot_archived_250217-155806/models/475000_G.pth
   
 datasets:
   # test1:
@@ -45,8 +45,8 @@ datasets:
   test 1:
     name: AID
     mode: LQGT
-    dataroot_GT: /workspace/Orthophotos_patches_png_scale16_split_ratio/HR/test
-    dataroot_LQ: /workspace/Orthophotos_patches_png_scale16_split_ratio/LR/test
+    dataroot_GT: /workspace/Orthophotos_patches_png_scale16_20_wholeimage/HR
+    dataroot_LQ: /workspace/Orthophotos_patches_png_scale16_20_wholeimage/LR
     img_channel: 3
  
 #### network structures

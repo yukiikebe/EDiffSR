@@ -1,5 +1,5 @@
 #### general settings
-name: ediffsr_train_farm_with_flip_rot
+name: ediffsr_train_farm_with_flip_rot_tmp
 use_tb_logger: true
 model: denoising
 distortion: sr

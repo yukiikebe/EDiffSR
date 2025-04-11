@@ -158,8 +158,8 @@ def split_dataset_by_matching_files_ratio(root_dir, output_dir, train_ratio, val
                     
     
 # Define input and output directories
-input_dir = "../Orthophotos_patches_png_scale16"
-output_dir = "../Orthophotos_patches_png_scale16_split_ratio"
+input_dir = "../NOAA_NGS_2019_patches_png_scale16"
+output_dir = "../NOAA_NGS_2019_patches_png_scale16_split_ratio"
 
 # Specify the number of images per category for each set
 # train_size = 100

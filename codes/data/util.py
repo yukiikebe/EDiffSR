@@ -79,14 +79,47 @@ def read_img(env, path, size=None):
     return img
 
 ###########################Add function
-def read_tif(path, normalize="minmax", size=None):
+def read_tif(path, color, normalize="minmax", size=None):
     with rasterio.open(path) as src:
         img = src.read()  # Shape: (C, H, W)
-
-    if img.shape[0] > 7:
-        img = img[:7, :, :]  # Remove the 8th channel (NIR)
+    ndvi = None
+    if color == "Multiband":
+        if img.shape[0] > 7:
+            img = img[:7, :, :]  # Remove the 8th channel
+    elif color == "RNIR":
+        img = img[[0, 3], :, :]
         
-    img = np.transpose(img, (1, 2, 0))  # Convert to (H, W, C)
+    elif color == "RGBNIR":
+        img = img[[0, 1, 2, 3], :, :]
+    elif color == "NDVI":
+        R = img[0,:,:].astype(np.float32)
+        N = img[3,:,:].astype(np.float32)
+        
+        assert R.max() <= 65535 and N.max() <= 65535, "Pixel values should be in the range [0, 65535]"  # 16-bit image
+        
+        if np.any(N + R == 0):
+            ndvi = np.zeros_like(R)
+        else:
+            ndvi = (N - R) / (N + R)
+        ndvi = np.clip(ndvi, -1, 1)
+        img = ndvi
+        # print("NDVI min/max:", ndvi.min(), ndvi.max())
+        # print("NDVI dtype:", ndvi.dtype)
+    elif color == "MultibandNDVI":
+        R = img[0,:,:].astype(np.float32)
+        N = img[3,:,:].astype(np.float32)
+        
+        assert R.max() <= 65535 and N.max() <= 65535, "Pixel values should be in the range [0, 65535]"
+        if np.any(N + R == 0):
+            ndvi = np.zeros_like(R)
+        else:
+            ndvi = (N - R) / (N + R)
+        ndvi = np.clip(ndvi, -1, 1)
+        # print("NDVI min/max:", ndvi.min(), ndvi.max())
+        img = img[:7, :, :]  # Remove the 8th channel
+    
+    if not color == "NDVI":
+        img = np.transpose(img, (1, 2, 0))  # Convert to (H, W, C)
 
     if normalize == "minmax":  # Scale to [0,1]
         if img.dtype == np.uint8:
@@ -105,6 +138,61 @@ def read_tif(path, normalize="minmax", size=None):
         for c in range(img.shape[2]):
             img[:, :, c] = (img[:, :, c] - channel_means[c]) / channel_stds[c]
 
+    #debug for save image
+    # if color == "RNIR":
+    #      if img.shape[:2] == (256, 256):
+    #         red = img[:, :, 0]  # Red band
+    #         nir = img[:, :, 1]  # NIR band
+            
+    #         # Normalize to 0-255 for visualization
+    #         red = (red - red.min()) / (red.max() - red.min() + 1e-8) * 255
+    #         nir = (nir - nir.min()) / (nir.max() - nir.min() + 1e-8) * 255
+
+    #         red = np.clip(red, 0, 255).astype(np.uint8)
+    #         nir = np.clip(nir, 0, 255).astype(np.uint8)
+
+    #         # Create a 3-channel image for better visualization (Red-NIR False Color)
+    #         false_color_image = np.zeros((256, 256, 3), dtype=np.uint8)
+    #         false_color_image[:, :, 0] = nir  # NIR in Red Channel
+    #         false_color_image[:, :, 1] = red  # Red in Green Channel
+    #         false_color_image[:, :, 2] = np.zeros_like(red)  # Empty Blue Channel
+
+    #         # Save the false-color image
+    #         cv2.imwrite("RNIR_false_color.png", false_color_image)
+
+    #         print("Saved RNIR False Color Image Successfully!")
+    
+    if color == "NDVI":
+        output_dir = "Input_NDVI"
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, os.path.basename(path) + "_NDVI.png")
+        img_copy = np.expand_dims(img, axis=2)
+        img_copy = (img_copy * 255).astype(np.uint8)  # Convert to uint8
+        output_files = os.listdir(output_dir)
+        if len(output_files) < 100:
+            if img_copy.shape[:2] == (256, 256):
+                cv2.imwrite(output_path, img_copy)
+    elif color == "Multiband" or color == "RGBNIR" or color == "MultibandNDVI":
+        output_dir = f"Input_{color}"
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, os.path.basename(path) + f"_{color}.png")
+        output_files = os.listdir(output_dir)
+        if len(output_files) < 100:
+            if img.shape[:2] == (256, 256):
+                img_copy = img.copy()
+                if img_copy.dtype == np.float32:
+                    img_copy = (img_copy * 255).astype(np.uint8)  # Convert to uint8
+                output_path = output_path.replace('.png', '.tif')  # Change extension to .tif
+                with rasterio.open(output_path, 'w', height=img_copy.shape[0], width=img_copy.shape[1], count=img_copy.shape[2], dtype=img_copy.dtype) as dst:
+                    for i in range(img_copy.shape[2]):
+                        dst.write(img_copy[:, :, i], i + 1)
+    
+    if color == "MultibandNDVI":
+        img = np.concatenate((img, np.expand_dims(ndvi, axis=2)), axis=2)
+        # for i in range(img.shape[2]):
+        #     print(f"Channel {i} min/max: {img[:, :, i].min()}, {img[:, :, i].max()}")
+        # print("Last channel(ndvi) min/max:", img[:, :, -1].min(), img[:, :, -1].max())
+        
     return img
 ####################################
 
@@ -112,8 +200,8 @@ def read_tif(path, normalize="minmax", size=None):
 # process on numpy image
 
 ####################################
-def adjust_brightness(image, alpha=1.0, beta=0):
-    return cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+def adjust_brightness(img, alpha=1.0):
+    return np.clip(img + alpha, 0.0, 1.0)
 
 def add_blur(image, ksize=(3, 3)): # ksize shoould be odd number
     return cv2.GaussianBlur(image, ksize, 0)
@@ -135,7 +223,7 @@ def add_salt_and_pepper_noise(image, salt_prob=0.02, pepper_prob=0.02):
     return noisy_image
 ####################################
 
-def augment(img, hflip=True, rot=True, mode=None, swap=None, noise=True, bright=True, blur=True):
+def augment(img, noise, bright, blur, hflip=True, rot=True, mode=None, swap=None):
     # horizontal flip OR rotate
     hflip = hflip and random.random() < 0.5
     vflip = rot and random.random() < 0.5
@@ -148,15 +236,16 @@ def augment(img, hflip=True, rot=True, mode=None, swap=None, noise=True, bright=
             img = img[::-1, :, :]
         if rot90:
             img = img.transpose(1, 0, 2)
-        if noise:
-            if img.shape[:2] == (16, 16): # same as LR image size
+        if img.shape[:2] == (16, 16): # same as LR image size
+            if noise:
                 img = add_salt_and_pepper_noise(img)
                 salt = random.uniform(0.005, 0.01)
                 papper = random.uniform(0.005, 0.01)
                 img = add_salt_and_pepper_noise(img, salt, papper)
-        if bright:
-            alpha = random.uniform(-1.5, 1.5)
-            img = adjust_brightness(img, alpha=alpha)
+            if bright:
+                alpha = random.uniform(-0.2, 0.12)
+                img_adjusted = adjust_brightness(img, alpha)
+                img = img_adjusted
             
         if blur:
             img = add_blur(img)

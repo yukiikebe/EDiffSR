@@ -148,18 +148,52 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
     Input: 4D(B,(3/1),H,W), 3D(C,H,W), or 2D(H,W), any range, RGB channel order
     Output: 3D(H,W,C) or 2D(H,W), [0,255], np.uint8 (default)
     """
-    tensor = tensor.squeeze().float().cpu().clamp_(*min_max)  # clamp
-    tensor = (tensor - min_max[0]) / (min_max[1] - min_max[0])  # to range [0,1]
+    tensor = tensor.squeeze().float().cpu()
+    print(f"channel 7 before:{tensor[7]}")
+    if tensor.shape[0] > 7:
+        tensor[7] = (tensor[7] + 1) / 2
+    print(f"channel 7 after:{tensor[7]}")
+    tensor = tensor.clamp(min=min_max[0], max=min_max[1])  
+    tensor = (tensor - min_max[0]) / (min_max[1] - min_max[0])
+
     n_dim = tensor.dim()
+    # print("n_dim: ", n_dim)
     if n_dim == 4:
         n_img = len(tensor)
         img_np = make_grid(tensor, nrow=int(math.sqrt(n_img)), normalize=False).numpy()
         img_np = np.transpose(img_np[[2, 1, 0], :, :], (1, 2, 0))  # HWC, BGR
     elif n_dim == 3:
         img_np = tensor.numpy()
-        img_np = np.transpose(img_np[[2, 1, 0], :, :], (1, 2, 0))  # HWC, BGR
+        if img_np.ndim == 3:
+        # if img_np.n_dim == 3:
+            C, H, W = img_np.shape
+        else:
+            H, W = img_np.shape
+            C = 1
+
+        if C == 3:
+            img_np = img_np.transpose(1, 2, 0)  # Convert to HWC
+            img_np = img_np[:, :, [2, 1, 0]]  # Convert RGB to BGR
+            
+            # Extract channel 0
+            channel_0_img = img_np[:, :, 0]
+            # # Save channel 0 image
+            channel_0_img_path = "RGB_channel_0_image.png"
+            cv2.imwrite(channel_0_img_path, channel_0_img)
+
+        elif C > 3:
+            img_np = img_np.transpose(1, 2, 0)  # Convert to HWC
+            # print("img_np.dtype: ", img_np.dtype)
+            # print("img_np.shape: ", img_np.shape)
+            # print("int_np[:, :, -1] min/max: ", img_np[:, :, -1].min(), img_np[:, :, -1].max())
+
+        else:  # C == 2 (grayscale, or other 2-channel images)
+            img_np = img_np.transpose(1, 2, 0)
+        
+        # print("img_np.shape: ", img_np.shape)
     elif n_dim == 2:
         img_np = tensor.numpy()
+        print("dtype", img_np.dtype)
     else:
         raise TypeError(
             "Only support 4D, 3D and 2D tensor. But received with dimension: {:d}".format(
@@ -167,8 +201,12 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
             )
         )
     if out_type == np.uint8:
-        img_np = (img_np * 255.0).round()
-        # Important. Unlike matlab, numpy.unit8() WILL NOT round by default.
+        if img_np.dtype == np.float32 or img_np.dtype == np.float64:
+            img_np = np.clip(img_np * 255.0, 0, 255).astype(np.uint8)
+            
+        if img_np.dtype == np.uint16:
+            img_np = (img_np / 65535.0 * 255).astype(np.uint8)
+    # print("img_np[:, :, -1] min/max: ", img_np[:, :, -1].min(), img_np[:, :, -1].max())
     return img_np.astype(out_type)
 
 
@@ -189,14 +227,60 @@ def img2tensor(img):
 
 
 def calculate_psnr(img1, img2):
-    # img1 and img2 have range [0, 255]
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
-    mse = np.mean((img1 - img2) ** 2)
-    if mse == 0:
-        return float("inf")
-    return 20 * math.log10(255.0 / math.sqrt(mse))
+    # Ensure the images have the same shape
+    assert img1.shape == img2.shape, "Input images must have the same dimensions"
+    assert img1.dtype == img2.dtype, "Input images must have the same dtype"
 
+    # print("dtype img1: ", img1.dtype)
+    # print("dtype img2: ", img2.dtype)
+    # print("img1.shape: ", img1.shape)
+    # print("img2.shape: ", img2.shape)
+    max_val = 255.0
+    
+    if img1.dtype == np.uint8:
+        max_val = 255.0
+        img1 = img1.astype(np.float64)
+    if img2.dtype == np.uint8:
+        img2 = img2.astype(np.float64)
+        
+    if img1.dtype == np.uint16:
+        max_val = 65535.0
+        img1 = (img1 / 65535.0) * 255.0
+    if img2.dtype == np.uint16:
+        img2 = (img2 / 65535.0) * 255.0    
+    
+    if img1.dtype == np.float32 or img1.dtype == np.float64:
+        if img1.min() < 0:
+            max_val = 2.0
+        else:
+            max_val = 1.0
+    # print("max_val: ", max_val )   
+    if len(img1.shape) == 2:
+        mse = np.mean((img1 - img2) ** 2)
+        if mse == 0:
+            return np.nan
+        return 20 * math.log10(max_val / math.sqrt(mse))
+    elif len(img1.shape) == 3:
+        C = img1.shape[2]  
+        psnr_values = []
+
+        for c in range(C):
+            mse = np.mean((img1[:, :, c] - img2[:, :, c]) ** 2)
+            if mse == 0:
+                psnr_values.append(np.nan)
+            else:
+                psnr_values.append(20 * math.log10(max_val / math.sqrt(mse)))
+        # print("psnr_values: ", psnr_values)
+        avg_psnr = np.nanmean(psnr_values)  
+        return avg_psnr, psnr_values
+  
+    # img1 and img2 have range [0, 255]
+    # img1 = img1.astype(np.float64)
+    # img2 = img2.astype(np.float64)
+    # mse = np.mean((img1 - img2) ** 2)
+    # if mse == 0:
+    #     return float("inf")
+    # return 20 * math.log10(255.0 / math.sqrt(mse))
 
 def ssim(img1, img2):
     C1 = (0.01 * 255) ** 2

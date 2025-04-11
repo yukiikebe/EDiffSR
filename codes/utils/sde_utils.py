@@ -6,6 +6,13 @@ import torchvision.utils as tvutils
 import os
 from scipy import integrate
 import tifffile
+import torch.nn.functional as F
+import torch.nn as nn
+import warnings
+from rasterio.errors import NotGeoreferencedWarning
+from torch.utils.checkpoint import checkpoint 
+
+warnings.filterwarnings("ignore", category=NotGeoreferencedWarning)
 
 
 class SDE(abc.ABC):
@@ -228,6 +235,32 @@ class IRSDE(SDE):
             tvutils.save_image(x.data, f'{save_dir}/state_{t}.png', normalize=False)
         return x
 
+    def reverse_sde_with_checkpoint(self, xt, T=-1, save_states=False, save_dir='sde_state', **kwargs):
+        T = self.T if T < 0 else T
+        x = xt.clone()
+        for t in tqdm(reversed(range(1, T + 1))):
+            def step_fn(x, t_tensor):
+                t_int = int(t_tensor.flatten()[0].item()) 
+                score = self.score_fn(x, t_int, **kwargs)
+                return self.reverse_sde_step(x, score, t_int)
+
+            if save_states: # only consider to save 100 images
+                interval = self.T // 100
+                if t % interval == 0:
+                    idx = t // interval
+                    os.makedirs(save_dir, exist_ok=True)
+                    
+                    if x.shape[1] > 3:
+                        tifffile.imwrite(f'{save_dir}/state_{idx}.tiff', x.data.squeeze().permute(1, 2, 0).cpu().numpy())
+                        # tifffile.imwrite(f'{save_dir}/state_{idx}.tiff', x.data.cpu().numpy())
+                    else:
+                        tvutils.save_image(x.data, f'{save_dir}/state_{idx}.png', normalize=False)
+                            
+            t_tensor = torch.full_like(x[:, :1, :, :], t, device=x.device, dtype=torch.float32)
+            x = checkpoint(step_fn, x, t_tensor)
+
+        return x
+
     def reverse_sde(self, xt, T=-1, save_states=False, save_dir='sde_state', **kwargs):
         T = self.T if T < 0 else T
         x = xt.clone()
@@ -310,6 +343,11 @@ class IRSDE(SDE):
     def generate_random_states(self, x0, mu):
         x0 = x0.to(self.device)
         mu = mu.to(self.device)
+        
+        # mu = self.extract_multiscale_features(mu)
+        # mu = self.add_gradient_features(mu)
+        # mu = self.reduce_channels(mu, out_channels=x0.shape[1])
+        # print(mu.shape)
 
         self.set_mu(mu)
 
@@ -327,6 +365,37 @@ class IRSDE(SDE):
     def noise_state(self, tensor):
         return tensor + torch.randn_like(tensor) * self.max_sigma
 
+    def extract_multiscale_features(self, img):
+        scale_1 = F.interpolate(img, scale_factor=1.0, mode='bilinear', align_corners=False)  # 元の解像度
+        scale_2 = F.interpolate(img, scale_factor=0.5, mode='bilinear', align_corners=False)  # 1/2 解像度
+        scale_3 = F.interpolate(img, scale_factor=0.25, mode='bilinear', align_corners=False) # 1/4 解像度
+        
+        scale_2 = F.interpolate(scale_2, size=scale_1.shape[-2:], mode='bilinear')
+        scale_3 = F.interpolate(scale_3, size=scale_1.shape[-2:], mode='bilinear')
+    
+        combined_features = torch.cat([scale_1, scale_2, scale_3], dim=1) 
+
+        return combined_features
+    
+    def add_gradient_features(self, img):
+        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=img.device).unsqueeze(0).unsqueeze(0)
+        sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32, device=img.device).unsqueeze(0).unsqueeze(0)
+
+        sobel_x = sobel_x.expand(img.shape[1], 1, 3, 3)
+        sobel_y = sobel_y.expand(img.shape[1], 1, 3, 3)
+    
+        # if RGB, it applies each chennel
+        edge_x = F.conv2d(img, sobel_x, padding=1, groups=img.shape[1])
+        edge_y = F.conv2d(img, sobel_y, padding=1, groups=img.shape[1])
+
+        edge_magnitude = torch.sqrt(edge_x**2 + edge_y**2) 
+
+        return torch.cat([img, edge_magnitude], dim=1)
+
+    def reduce_channels(self, img, out_channels=3):
+        """ Reduce multi-scale features to match GT image channels """
+        conv = nn.Conv2d(img.shape[1], out_channels, kernel_size=1, stride=1, padding=0, bias=False).to(img.device)
+        return conv(img)
 
 
 

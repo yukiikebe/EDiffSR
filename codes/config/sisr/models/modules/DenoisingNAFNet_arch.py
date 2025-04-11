@@ -237,9 +237,7 @@ class ConditionalNAFNet(nn.Module):
 
         B, C, H, W = x.shape
         x = self.check_image_size(x)
-        # print("x_shape:",x.shape)
-        # print(inp_res.shape)
-        # print(cond.shape)
+        # print(f" - Input to intro: {x.shape}")
 
         x = self.intro(x)
 
@@ -261,9 +259,8 @@ class ConditionalNAFNet(nn.Module):
             x, _ = decoder([x, t])
 
         x = self.ending(x)
-
+        
         x = x[..., :H, :W]
-
         return x
 
     def check_image_size(self, x):

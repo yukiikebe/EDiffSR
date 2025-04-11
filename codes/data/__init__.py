@@ -26,6 +26,8 @@ def create_dataloader(dataset, dataset_opt, opt=None, sampler=None):
             sampler=sampler,
             drop_last=True,
             pin_memory=False,
+            persistent_workers=False,
+            multiprocessing_context="spawn",
         )
     else:
         return torch.utils.data.DataLoader(

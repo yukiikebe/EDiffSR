@@ -67,7 +67,8 @@ def parse(opt_path, is_train=True):
     path = osp.abspath(__file__)
     # print(111, path)
     # config_dir = path.split("/")[-2]
-    config_dir = 'sisr'
+    # config_dir = 'sisr'
+    config_dir = 'yuki'
     if is_train:
         experiments_root = osp.join(
             opt["path"]["root"], "experiments", config_dir, opt["name"]

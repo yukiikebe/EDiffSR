@@ -1,0 +1,30 @@
+name: super_res_env
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch
+  - torchvision
+  - cudatoolkit=11.7
+  - tqdm
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - tensorboard
+  - ipython
+  - pyyaml
+  - lmdb
+  - tifffile
+  - rasterio
+  - opencv
+  - pip
+  - pip:
+      - ema-pytorch
+      - lpips
+      - einops
+      - DISTS-pytorch
+      - pytorch_fid
+      - wandb

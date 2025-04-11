@@ -48,7 +48,7 @@ datasets:
     # dataroot_GT: /workspace/AID_split_matched/HR/val
     # dataroot_LQ: /workspace/AID_split_matched/LR/val
     dataroot_GT: /workspace/Orthophotos_patches_png_scale16_split_ratio/HR/val
-    dataroot_LQ: /workspace/Orthophotos_patches_png_scale16_split_ratio/LR/val
+    dataroot_LQ: /workspace/Orthophotos_patches_png_scale16_split_ratio/HR/val
     img_channel: 3
 
 
@@ -67,7 +67,7 @@ path:
   pretrain_model_G: ../../../experiments/sisr/ediffsr_retrain_archived_250127-182748/models/225000_G.pth
   strict_load: true
   # strict_load: false
-  #resume_state: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/image-restoration-sde-main/codes/config/sisr/log/refusion/training_state/360000.state
+  # resume_state: ../../../experiments/sisr/ediffsr_train_farm_with_flip_rot_brighness/training_state/595000.state
   resume_state: ~
 
 #### training settings: learning rate scheme, loss

@@ -1,5 +1,5 @@
 # name: Test-AID-iter200000
-name: Test-AID-farm-RGB-flip-rot-noise-bright-iter90000
+name: Test-AID-farm-RGB-flip-rot-noise-bright-iter90000-re
 # name : Test-Sentinel-test-iter180000
 suffix: ~  # add suffix to saved images
 model: denoising
@@ -22,7 +22,7 @@ degradation:
 
 #### path
 path:
-  pretrain_model_G: ../../../experiments/sisr/ediffsr_train_farm_with_flip_rot_noise_brighness/models/90000_G.pth
+  pretrain_model_G: ../../../experiments/sisr/ediffsr_train_farm_with_noise/models/330000_G.pth
   
 datasets:
   # test1:

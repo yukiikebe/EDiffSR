@@ -1,5 +1,5 @@
 #### general settings
-name: ediffsr_retrain_farm_multiband_calculation
+name: ediffsr_train_farm_multiband
 use_tb_logger: true
 model: denoising
 distortion: sr
@@ -37,6 +37,9 @@ datasets:
     LR_size: 16
     use_flip: true
     use_rot: true
+    use_noise: False
+    use_bright: False
+    use_blur: False
     color: Multiband
     img_channel: 7 #add my selelf
   val:
@@ -46,6 +49,7 @@ datasets:
     # dataroot_LQ: /workspace/AID_split_matched/LR/val
     dataroot_GT: /workspace/Orthophotos_patches_tiff_scale16_split_ratio/HR/val
     dataroot_LQ: /workspace/Orthophotos_patches_tiff_scale16_split_ratio/LR/val
+    color: Multiband
     img_channel: 7 #add my selelf
 
 

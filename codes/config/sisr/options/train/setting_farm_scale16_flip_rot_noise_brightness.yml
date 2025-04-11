@@ -1,5 +1,5 @@
 #### general settings
-name: ediffsr_train_farm_with_flip_rot_noise_brighness
+name: ediffsr_train_farm_with_noise
 use_tb_logger: true
 model: denoising
 distortion: sr
@@ -37,7 +37,7 @@ datasets:
     LR_size: 16
     use_flip: True
     use_rot: True
-    use_noise:False
+    use_noise: True
     use_bright: True
     use_blur: False
     color: RGB
@@ -67,8 +67,8 @@ path:
   pretrain_model_G: ../../../experiments/sisr/ediffsr_retrain_archived_250127-182748/models/225000_G.pth
   strict_load: true
   # strict_load: false
-  #resume_state: /home/amax/Desktop/16T/disk3/XY-SPACE/SISR/image-restoration-sde-main/codes/config/sisr/log/refusion/training_state/360000.state
-  resume_state: ~
+  resume_state: ../../../experiments/sisr/ediffsr_train_farm_with_noise/training_state/200000.state
+  # resume_state: ~
 
 #### training settings: learning rate scheme, loss
 train:
