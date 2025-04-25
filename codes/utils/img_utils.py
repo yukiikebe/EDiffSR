@@ -149,10 +149,10 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
     Output: 3D(H,W,C) or 2D(H,W), [0,255], np.uint8 (default)
     """
     tensor = tensor.squeeze().float().cpu()
-    print(f"channel 7 before:{tensor[7]}")
+    # print(f"channel 7 before:{tensor[7]}")
     if tensor.shape[0] > 7:
         tensor[7] = (tensor[7] + 1) / 2
-    print(f"channel 7 after:{tensor[7]}")
+    # print(f"channel 7 after:{tensor[7]}")
     tensor = tensor.clamp(min=min_max[0], max=min_max[1])  
     tensor = (tensor - min_max[0]) / (min_max[1] - min_max[0])
 

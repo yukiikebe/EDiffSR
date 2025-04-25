@@ -78,6 +78,36 @@ def sobel_edge_detection(img):
     _, sobel_binary = cv2.threshold(sobel_edges, 50, 255, cv2.THRESH_BINARY)
     return sobel_binary
 
+def process_and_save_edge_masks(canny_img, canny_gt, sobel_img, sobel_gt, dataset_dir, img_name, threshold = 0.5, file_name = "RGB"):
+    # Process and save Canny edge masks
+    threshold = threshold
+    canny_edge_mask = (canny_img > threshold).astype(np.float32)
+    canny_edge_gt_mask = canny_gt * canny_edge_mask
+    pred_magnitude_mask = canny_img * canny_edge_mask
+    canny_edge_gt_mask = Image.fromarray(canny_edge_gt_mask).convert("L")
+    canny_pred_edge_rgb_img_mask = Image.fromarray(pred_magnitude_mask).convert("L")
+    canny_edge_gt_mask.save(os.path.join(dataset_dir, img_name + f"_GT_{file_name}_canny_edge_mask.png"))
+    canny_pred_edge_rgb_img_mask.save(os.path.join(dataset_dir, img_name + f"_SR_{file_name}_canny_edge_mask.png"))
+
+    # Process and save Sobel edge masks
+    sobel_edge_mask = (sobel_gt > threshold).astype(np.float32)
+    sobel_gt_mask = sobel_gt * sobel_edge_mask
+    pred_magnitude_mask = sobel_img * sobel_edge_mask
+    sobel_gt_mask = Image.fromarray(sobel_gt_mask).convert("L")
+    sobel_pred_edge_rgb_img_mask = Image.fromarray(pred_magnitude_mask).convert("L")
+    sobel_gt_mask.save(os.path.join(dataset_dir, img_name + f"_GT_{file_name}_sobel_edge_mask.png"))
+    sobel_pred_edge_rgb_img_mask.save(os.path.join(dataset_dir, img_name + f"_SR_{file_name}_sobel_edge_mask.png"))
+
+    # Calculate L2 loss for mask images
+    canny_edge_gt_mask = np.array(canny_edge_gt_mask)
+    canny_pred_edge_rgb_img_mask = np.array(canny_pred_edge_rgb_img_mask)
+    sobel_gt_mask = np.array(sobel_gt_mask)
+    sobel_pred_edge_rgb_img_mask = np.array(sobel_pred_edge_rgb_img_mask)
+    canny_edge_rgb_l2 = np.mean((canny_edge_gt_mask - canny_pred_edge_rgb_img_mask) ** 2)
+    sobel_edge_rgb_l2 = np.mean((sobel_gt_mask - sobel_pred_edge_rgb_img_mask) ** 2)
+
+    return canny_edge_rgb_l2, sobel_edge_rgb_l2
+
     
 #### options
 parser = argparse.ArgumentParser()
@@ -155,12 +185,26 @@ for test_loader in test_loaders:
     each_channels_psnrs_avg = [[] for _ in range(opt["datasets"]["test 1"]["img_channel"])]
     all_NVDI_psnr_values_from_RNIR = []
     all_NVDI_psnr_values_from_NDVI_channel = []
-    all_canny_edge_rgb_psnr = []
-    all_canny_edge_r_psnr = []
-    all_canny_edge_nir_psnr = []
-    all_sobel_edge_rgb_psnr = []
-    all_sobel_edge_r_psnr = []
-    all_sobel_edge_nir_psnr = []
+    # all_canny_edge_rgb_psnr = []
+    # all_canny_edge_r_psnr = []
+    # all_canny_edge_nir_psnr = []
+    # all_sobel_edge_rgb_psnr = []
+    # all_sobel_edge_r_psnr = []
+    # all_sobel_edge_nir_psnr = []
+    
+    all_canny_edge_rgb_l2 = []
+    all_canny_edge_r_l2 = []
+    all_canny_edge_nir_l2 = []
+    all_sobel_edge_rgb_l2 = []
+    all_sobel_edge_r_l2 = []
+    all_sobel_edge_nir_l2 = []
+    all_canny_edge_rgb_mask_l2 = []
+    all_sobel_edge_rgb_mask_l2 = []
+    all_canny_edge_r_mask_l2 = []
+    all_sobel_edge_r_mask_l2 = []
+    all_canny_edge_nir_mask_l2 = []
+    all_sobel_edge_nir_mask_l2 = []
+    
     for i, test_data in enumerate(test_loader):
         single_img_psnr = []
         single_img_ssim = []
@@ -379,19 +423,74 @@ for test_loader in test_loaders:
                 sobel_edge_nir_img_gt = np.array(sobel_edge_nir_img_gt)
                 
                 #check dtype and shape and if gt and output are same
-                canny_edge_rgb_psnr = util.calculate_psnr(canny_edge_rgb_img, canny_edge_rgb_img_gt)
+                # canny_edge_rgb_psnr = util.calculate_psnr(canny_edge_rgb_img, canny_edge_rgb_img_gt)
                 # Append PSNR values to their respective lists for averaging later
-                canny_edge_r_psnr = util.calculate_psnr(canny_edge_r_img, canny_edge_r_img_gt)
-                canny_edge_nir_psnr = util.calculate_psnr(canny_edge_nir_img, canny_edge_nir_img_gt)
-                sobel_edge_rgb_psnr = util.calculate_psnr(sobel_edge_rgb_img, sobel_edge_rgb_img_gt)
-                sobel_edge_r_psnr = util.calculate_psnr(sobel_edge_r_img, sobel_edge_r_img_gt)
-                sobel_edge_nir_psnr = util.calculate_psnr(sobel_edge_nir_img, sobel_edge_nir_img_gt)
-                all_canny_edge_rgb_psnr.append(canny_edge_rgb_psnr)
-                all_canny_edge_r_psnr.append(canny_edge_r_psnr)
-                all_canny_edge_nir_psnr.append(canny_edge_nir_psnr)
-                all_sobel_edge_rgb_psnr.append(sobel_edge_rgb_psnr)
-                all_sobel_edge_r_psnr.append(sobel_edge_r_psnr)
-                all_sobel_edge_nir_psnr.append(sobel_edge_nir_psnr)
+                # canny_edge_r_psnr = util.calculate_psnr(canny_edge_r_img, canny_edge_r_img_gt)
+                # canny_edge_nir_psnr = util.calculate_psnr(canny_edge_nir_img, canny_edge_nir_img_gt)
+                # sobel_edge_rgb_psnr = util.calculate_psnr(sobel_edge_rgb_img, sobel_edge_rgb_img_gt)
+                # sobel_edge_r_psnr = util.calculate_psnr(sobel_edge_r_img, sobel_edge_r_img_gt)
+                # sobel_edge_nir_psnr = util.calculate_psnr(sobel_edge_nir_img, sobel_edge_nir_img_gt)
+                canny_edge_rgb_l2 = np.mean((canny_edge_rgb_img - canny_edge_rgb_img_gt) ** 2)
+                canny_edge_r_l2 = np.mean((canny_edge_r_img - canny_edge_r_img_gt) ** 2)
+                canny_edge_nir_l2 = np.mean((canny_edge_nir_img - canny_edge_nir_img_gt) ** 2)
+                sobel_edge_rgb_l2 = np.mean((sobel_edge_rgb_img - sobel_edge_rgb_img_gt) ** 2)
+                sobel_edge_r_l2 = np.mean((sobel_edge_r_img - sobel_edge_r_img_gt) ** 2)
+                sobel_edge_nir_l2 = np.mean((sobel_edge_nir_img - sobel_edge_nir_img_gt) ** 2)
+                
+                # all_canny_edge_rgb_psnr.append(canny_edge_rgb_psnr)
+                # all_canny_edge_r_psnr.append(canny_edge_r_psnr)
+                # all_canny_edge_nir_psnr.append(canny_edge_nir_psnr)
+                # all_sobel_edge_rgb_psnr.append(sobel_edge_rgb_psnr)
+                # all_sobel_edge_r_psnr.append(sobel_edge_r_psnr)
+                # all_sobel_edge_nir_psnr.append(sobel_edge_nir_psnr)
+                
+                all_canny_edge_r_l2.append(canny_edge_r_l2)
+                all_canny_edge_nir_l2.append(canny_edge_nir_l2)
+                all_canny_edge_rgb_l2.append(canny_edge_rgb_l2)
+                all_sobel_edge_r_l2.append(sobel_edge_r_l2)
+                all_sobel_edge_nir_l2.append(sobel_edge_nir_l2)
+                all_sobel_edge_rgb_l2.append(sobel_edge_rgb_l2)
+                
+                #add mask
+                threshold = 0.05
+                
+                canny_edge_rgb_mask_l2, sobel_edge_rgb_mask_l2 = process_and_save_edge_masks(
+                    canny_edge_rgb_img,
+                    canny_edge_rgb_img_gt,
+                    sobel_edge_rgb_img,
+                    sobel_edge_rgb_img_gt,
+                    dataset_dir,
+                    img_name,
+                    threshold,
+                )
+                all_canny_edge_rgb_mask_l2.append(canny_edge_rgb_mask_l2)
+                all_sobel_edge_rgb_mask_l2.append(sobel_edge_rgb_mask_l2)
+                
+                canny_edge_r_mask_l2, sobel_edge_r_mask_l2 = process_and_save_edge_masks(
+                    canny_edge_r_img,
+                    canny_edge_r_img_gt,
+                    sobel_edge_r_img,
+                    sobel_edge_r_img_gt,
+                    dataset_dir,
+                    img_name,
+                    threshold,
+                    file_name="R",
+                )
+                all_canny_edge_r_mask_l2.append(canny_edge_r_mask_l2)
+                all_sobel_edge_r_mask_l2.append(sobel_edge_r_mask_l2)
+                
+                canny_edge_nir_mask_l2, sobel_edge_nir_mask_l2 = process_and_save_edge_masks(
+                    canny_edge_nir_img,
+                    canny_edge_nir_img_gt,
+                    sobel_edge_nir_img,
+                    sobel_edge_nir_img_gt,
+                    dataset_dir,
+                    img_name,
+                    threshold,
+                    file_name="NIR",
+                )
+                all_canny_edge_r_mask_l2.append(canny_edge_nir_mask_l2)
+                all_sobel_edge_r_mask_l2.append(sobel_edge_nir_mask_l2)
                 
         elif output.shape[2] == 3:
             output = np.moveaxis(output, 0, -1)
@@ -446,12 +545,26 @@ for test_loader in test_loaders:
     
     average_psnr_from_RNIR = np.nanmean(all_NVDI_psnr_values_from_RNIR)
     average_psnr_from_NDVI_channel = np.nanmean(all_NVDI_psnr_values_from_NDVI_channel)
-    average_canny_edge_rgb_psnr = np.nanmean(all_canny_edge_rgb_psnr)
-    average_canny_edge_r_psnr = np.nanmean(all_canny_edge_r_psnr)
-    average_canny_edge_nir_psnr = np.nanmean(all_canny_edge_nir_psnr)
-    average_sobel_edge_rgb_psnr = np.nanmean(all_sobel_edge_rgb_psnr)
-    average_sobel_edge_r_psnr = np.nanmean(all_sobel_edge_r_psnr)
-    average_sobel_edge_nir_psnr = np.nanmean(all_sobel_edge_nir_psnr)
+    # average_canny_edge_rgb_psnr = np.nanmean(all_canny_edge_rgb_psnr)
+    # average_canny_edge_r_psnr = np.nanmean(all_canny_edge_r_psnr)
+    # average_canny_edge_nir_psnr = np.nanmean(all_canny_edge_nir_psnr)
+    # average_sobel_edge_rgb_psnr = np.nanmean(all_sobel_edge_rgb_psnr)
+    # average_sobel_edge_r_psnr = np.nanmean(all_sobel_edge_r_psnr)
+    # average_sobel_edge_nir_psnr = np.nanmean(all_sobel_edge_nir_psnr)
+    
+    average_canny_edge_rgb_l2 = np.nanmean(all_canny_edge_rgb_l2)  
+    average_canny_edge_r_l2 = np.nanmean(all_canny_edge_r_l2)
+    average_canny_edge_nir_l2 = np.nanmean(all_canny_edge_nir_l2)
+    average_sobel_edge_rgb_l2 = np.nanmean(all_sobel_edge_rgb_l2)
+    average_sobel_edge_r_l2 = np.nanmean(all_sobel_edge_r_l2)
+    average_sobel_edge_nir_l2 = np.nanmean(all_sobel_edge_nir_l2)
+    average_canny_edge_rgb_mask_l2 = np.nanmean(all_canny_edge_rgb_mask_l2)
+    average_sobel_edge_rgb_mask_l2 = np.nanmean(all_sobel_edge_rgb_mask_l2)
+    average_canny_edge_r_mask_l2 = np.nanmean(all_canny_edge_r_mask_l2)
+    average_sobel_edge_r_mask_l2 = np.nanmean(all_sobel_edge_r_mask_l2)
+    average_canny_edge_nir_mask_l2 = np.nanmean(all_canny_edge_nir_mask_l2)
+    average_sobel_edge_nir_mask_l2 = np.nanmean(all_sobel_edge_nir_mask_l2)
+    
     all_channels_avg_psnr /= len(test_loader)
     print(f"Average PSNR for all channels: {all_channels_avg_psnr}")
     for i in range(len(each_channels_psnrs_avg)):
@@ -459,21 +572,48 @@ for test_loader in test_loaders:
         print(f"Average PSNR for channel {i}: {each_channels_psnrs_avg[i]}")
     print(f"Average PSNR NDVI from RNIR: {average_psnr_from_RNIR}")
     print(f"Average PSNR NDVI from NDVI channel: {average_psnr_from_NDVI_channel}")
-    print(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_psnr}")
-    print(f"Average Canny Edge PSNR (R): {average_canny_edge_r_psnr}")
-    print(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_psnr}")
-    print(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_psnr}")
-    print(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_psnr}")
-    print(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_psnr}")
+    # print(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_psnr}")
+    # print(f"Average Canny Edge PSNR (R): {average_canny_edge_r_psnr}")
+    # print(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_psnr}")
+    # print(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_psnr}")
+    # print(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_psnr}")
+    # print(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_psnr}")
+    
+    print(f"Average Canny Edge PSNR (R): {average_canny_edge_r_l2}")
+    print(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_l2}")
+    print(f"Average Canny Edge PSNR (R): {average_canny_edge_r_mask_l2}")
+    print(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_mask_l2}")
+    print(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_l2}")
+    print(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_mask_l2}")
+    print(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_mask_l2}")
+    print(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_l2}")
+    print(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_l2}")
+    print(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_l2}")
+    print(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_mask_l2}")
+    print(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_mask_l2}")
+    
     logger.info(f"Average PSNR for all channels: {all_channels_avg_psnr}")
     for i in range(len(each_channels_psnrs_avg)):
         logger.info(f"Average PSNR for channel {i}: {each_channels_psnrs_avg[i]}")
     logger.info(f"Average PSNR NDVI from RNIR: {average_psnr_from_RNIR}")
     logger.info(f"Average PSNR NDVI from NDVI channel: {average_psnr_from_NDVI_channel}")
-    logger.info(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_psnr}")
-    logger.info(f"Average Canny Edge PSNR (R): {average_canny_edge_r_psnr}")
-    logger.info(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_psnr}")
-    logger.info(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_psnr}")
-    logger.info(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_psnr}")
-    logger.info(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_psnr}")
+    # logger.info(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_psnr}")
+    # logger.info(f"Average Canny Edge PSNR (R): {average_canny_edge_r_psnr}")
+    # logger.info(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_psnr}")
+    # logger.info(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_psnr}")
+    # logger.info(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_psnr}")
+    # logger.info(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_psnr}")
+    
+    logger.info(f"Average Canny Edge PSNR (R): {average_canny_edge_r_l2}")
+    logger.info(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_l2}")
+    logger.info(f"Average Canny Edge PSNR (R): {average_canny_edge_r_mask_l2}")
+    logger.info(f"Average Sobel Edge PSNR (R): {average_sobel_edge_r_mask_l2}")
+    logger.info(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_l2}")
+    logger.info(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_l2}")
+    logger.info(f"Average Canny Edge PSNR (RGB): {average_canny_edge_rgb_mask_l2}")
+    logger.info(f"Average Sobel Edge PSNR (RGB): {average_sobel_edge_rgb_mask_l2}")
+    logger.info(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_l2}")
+    logger.info(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_l2}")
+    logger.info(f"Average Canny Edge PSNR (NIR): {average_canny_edge_nir_mask_l2}")
+    logger.info(f"Average Sobel Edge PSNR (NIR): {average_sobel_edge_nir_mask_l2}")
     print(f"average test time: {np.mean(test_times):.4f}")

@@ -74,8 +74,8 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_psnr_gradient', resume='must', id='cl8q99ce')
-        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_psnr_recalculate', resume='must', id='o39t52be')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate', resume='must', id='xntxsdld')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
         wandb.config.update(opt, allow_val_change=True)
 
     #### distributed training settings
@@ -332,9 +332,9 @@ def main():
                     model.test(sde)
                     visuals = model.get_current_visuals()
                     
-                    for channel in range(visuals["Output"].shape[0]):
-                        print(f"output channel before {channel} min:", visuals["Output"][channel, :, :].min())
-                        print(f"output channel before {channel} max:", visuals["Output"][channel, :, :].max())
+                    # for channel in range(visuals["Output"].shape[0]):
+                    #     print(f"output channel before {channel} min:", visuals["Output"][channel, :, :].min())
+                    #     print(f"output channel before {channel} max:", visuals["Output"][channel, :, :].max())
 
                     print(visuals["Output"].shape)
                     print(visuals["GT"].shape)
@@ -344,13 +344,13 @@ def main():
                         # gt_img = visuals["GT"].squeeze().cpu().numpy()
                         
                         output = util.tensor2img(visuals["Output"].squeeze(), out_type=np.float32)  # float32
-                        for channel in range(output.shape[2]):
-                            print(f"output channel {channel} min:", output[:, :, channel].min())
-                            print(f"output channel {channel} max:", output[:, :, channel].max())
+                        # for channel in range(output.shape[2]):
+                        #     print(f"output channel {channel} min:", output[:, :, channel].min())
+                        #     print(f"output channel {channel} max:", output[:, :, channel].max())
                         gt_img = util.tensor2img(visuals["GT"].squeeze(), out_type=np.float32)  # uint8
-                        for channel in range(gt_img.shape[2]):
-                            print(f"output channel {channel} min:", gt_img[:, :, channel].min())
-                            print(f"output channel {channel} max:", gt_img[:, :, channel].max())
+                        # for channel in range(gt_img.shape[2]):
+                        #     print(f"output channel {channel} min:", gt_img[:, :, channel].min())
+                        #     print(f"output channel {channel} max:", gt_img[:, :, channel].max())
                         avg_tmp_psnr, each_channels_psnrs = util.calculate_psnr(output, gt_img)
                         avg_psnr += avg_tmp_psnr
                         for i in range(len(each_channels_psnrs)):
