@@ -27,8 +27,8 @@ import sys
 sys.path.append('/home/yuki/EDiffSR/external/UNO')
 from navier_stokes_uno2d import UNO, UNO_S256
 
-sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer/libs')
-from model import SimpleTransformerEncoderLayer
+# sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer/libs')
+# from model import SimpleTransformerEncoderLayer
 
 # sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer')
 # from galerkin_attention import SimpleAttention
@@ -72,32 +72,37 @@ class DenoisingModel(BaseModel):
             width = train_opt['uno_width']
             self.save_path_model_input = opt["path"]["experiments_root"] + "/model_input_images"
         else:
-            in_width = 2
+            in_width = 12
             width = 32
             self.save_path_model_input = None
-            
-        self.uno_model = UNO(
-            in_width=in_width,
-            width=width,
-        ).to(self.device)
         
-        self.galerkin_attn = SimpleTransformerEncoderLayer(
-            n_head=4, 
-            d_model=8,
-            attention_type='galerkin',
-            pos_dim=2,
-            ).to(self.device)
-        
-        if opt["dist"]:
-            self.uno_model = DistributedDataParallel(
-                self.uno_model, device_ids=[torch.cuda.current_device()]
-            )
-            self.galerkin_attn = DistributedDataParallel(
-                self.galerkin_attn, device_ids=[torch.cuda.current_device()]
-            )
+        if self.is_train:
+            self.save_path_model_input = opt["path"]["experiments_root"] + "/model_input_images"
         else:
-            self.uno_model = DataParallel(self.uno_model)
-            self.galerkin_attn = DataParallel(self.galerkin_attn)
+            self.save_path_model_input = None
+            
+        # self.uno_model = UNO(
+        #     in_width=in_width,
+        #     width=width,
+        # ).to(self.device)
+        
+        # self.galerkin_attn = SimpleTransformerEncoderLayer(
+        #     n_head=4, 
+        #     d_model=8,
+        #     attention_type='galerkin',
+        #     pos_dim=2,
+        #     ).to(self.device)
+        
+        # if opt["dist"]:
+        #     self.uno_model = DistributedDataParallel(
+        #         self.uno_model, device_ids=[torch.cuda.current_device()]
+            # )
+        #     self.galerkin_attn = DistributedDataParallel(
+        #         self.galerkin_attn, device_ids=[torch.cuda.current_device()]
+        #     )
+        # else:
+        #     self.uno_model = DataParallel(self.uno_model)
+        #     self.galerkin_attn = DataParallel(self.galerkin_attn)
         
         self.model = networks.define_G(opt).to(self.device)
         if opt["dist"]:
@@ -112,8 +117,9 @@ class DenoisingModel(BaseModel):
 
         if self.is_train:
             self.model.train()
-            self.galerkin_attn.train()
-            self.uno_model.train()
+            # self.galerkin_attn.train()
+            # if self.uno_model is not None:
+            #     self.uno_model.train()
 
             is_weighted = opt['train']['is_weighted']
             loss_type = opt['train']['loss_type']
@@ -132,6 +138,13 @@ class DenoisingModel(BaseModel):
                 else:
                     if self.rank <= 0:
                         logger.warning("Params [{:s}] will not optimize.".format(k))
+            # if self.uno_model is not None:
+            #     for (k, v) in self.uno_model.named_parameters():
+            #         if v.requires_grad:
+            #             optim_params.append(v)
+            #         else:
+            #             if self.rank <= 0:
+            #                 logger.warning("UNO Params [{:s}] will not optimize.".format(k))
 
             if train_opt['optimizer'] == 'Adam':
                 self.optimizer = torch.optim.Adam(
@@ -158,21 +171,21 @@ class DenoisingModel(BaseModel):
                 print('Not implemented optimizer, default using Adam!')
             self.optimizers.append(self.optimizer)
 
-            self.optimizer_uno = torch.optim.Adam(
-                self.uno_model.parameters(),
-                lr=train_opt['lr_uno'],
-                weight_decay=train_opt['uno_weight_decay'],
-                betas=(train_opt['uno_beta1'], train_opt['uno_beta2']) 
-            )
-            self.optimizers.append(self.optimizer_uno)
+            # self.optimizer_uno = torch.optim.Adam(
+            #     self.uno_model.parameters(),
+            #     lr=train_opt['lr_uno'],
+            #     weight_decay=train_opt['uno_weight_decay'],
+            #     betas=(train_opt['uno_beta1'], train_opt['uno_beta2']) 
+            # )
+            # self.optimizers.append(self.optimizer_uno)
             
-            self.optimizer_galerkin = torch.optim.Adam(
-                self.galerkin_attn.parameters(),
-                lr=train_opt['lr_galerkin'],
-                weight_decay=train_opt['galerkin_weight_decay'],
-                betas=(train_opt['galerkin_beta1'], train_opt['galerkin_beta2'])
-            )
-            self.optimizers.append(self.optimizer_galerkin)
+            # self.optimizer_galerkin = torch.optim.Adam(
+            #     self.galerkin_attn.parameters(),
+            #     lr=train_opt['lr_galerkin'],
+            #     weight_decay=train_opt['galerkin_weight_decay'],
+            #     betas=(train_opt['galerkin_beta1'], train_opt['galerkin_beta2'])
+            # )
+            # self.optimizers.append(self.optimizer_galerkin)
             
             # schedulers
             print("self.optimizers: ", self.optimizers)
@@ -189,16 +202,16 @@ class DenoisingModel(BaseModel):
                         )
                     )
             elif train_opt["lr_scheme"] == "TrueCosineAnnealingLR":
-                # for optimizer in self.optimizers:
-                #     self.schedulers.append(
-                #         torch.optim.lr_scheduler.CosineAnnealingLR(
-                #             optimizer, 
-                #             T_max=train_opt["niter"],
-                #             eta_min=train_opt["eta_min"])
-                #     )
-                self.schedulers.append(torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=train_opt["niter"], eta_min=train_opt["eta_min"]))
-                self.schedulers.append(torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_uno, T_max=train_opt["niter"], eta_min=train_opt["eta_min"]))
-                self.schedulers.append(torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_galerkin, T_max=train_opt["niter"], eta_min=train_opt["eta_min"]))
+                for optimizer in self.optimizers:
+                    self.schedulers.append(
+                        torch.optim.lr_scheduler.CosineAnnealingLR(
+                            optimizer, 
+                            T_max=train_opt["niter"],
+                            eta_min=train_opt["eta_min"])
+                    )
+                # self.schedulers.append(torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=train_opt["niter"], eta_min=train_opt["eta_min"]))
+                # self.schedulers.append(torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_uno, T_max=train_opt["niter"], eta_min=train_opt["eta_min"]))
+                # self.schedulers.append(torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer_galerkin, T_max=train_opt["niter"], eta_min=train_opt["eta_min"]))
             else:
                 raise NotImplementedError("MultiStepLR learning rate scheme is enough.")
 
@@ -215,8 +228,8 @@ class DenoisingModel(BaseModel):
     def optimize_parameters(self, step, timesteps, sde:IRSDE=None):
         sde.set_mu(self.condition)
         self.optimizer.zero_grad()
-        self.optimizer_uno.zero_grad()
-        self.optimizer_galerkin.zero_grad()
+        # self.optimizer_uno.zero_grad()
+        # self.optimizer_galerkin.zero_grad()
         timesteps = timesteps.to(self.device)
         
         # print("timesteps: ", timesteps.shape)
@@ -234,26 +247,26 @@ class DenoisingModel(BaseModel):
         #     self.tmp_output = output
         
         # print(self.opt['train']['edge_weight'])
-        print("step", step)
-        if step < 1:
-            print("base_loss: ", base_loss.item())
-            total_loss = base_loss
-        else:
-            output = sde.reverse_sde_with_checkpoint(self.state)
+        # print("step", step)
+        # if step < 1:
+        #     print("base_loss: ", base_loss.item())
+        #     total_loss = base_loss
+        # else:
+        #     output = sde.reverse_sde_with_checkpoint(self.state)
         
-            # edge_l2_loss = self.compute_l2_loss(output, self.state_0,step)
-            uno_loss = self.compute_uno_edge_loss(output, self.state_0, step)
+        #     # edge_l2_loss = self.compute_l2_loss(output, self.state_0,step)
+        #     uno_loss = self.compute_uno_edge_loss(output, self.state_0, step)
                 
-            print("base_loss: ", base_loss.item(), "uno_loss: ", uno_loss.item())
-            total_loss = base_loss + self.opt['train']['edge_weight'] * uno_loss
+        #     print("base_loss: ", base_loss.item(), "uno_loss: ", uno_loss.item())
+        #     total_loss = base_loss + self.opt['train']['edge_weight'] * uno_loss
             
-            self.log_dict["uno_loss"] = uno_loss.item()
+        #     self.log_dict["uno_loss"] = uno_loss.item()
         # total_loss = base_loss + self.opt['train']['edge_weight'] * edge_l2_loss
-        # total_loss = base_loss
+        total_loss = base_loss
         total_loss.backward()
         self.optimizer.step()
-        self.optimizer_uno.step()
-        self.optimizer_galerkin.step()
+        # self.optimizer_uno.step()
+        # self.optimizer_galerkin.step()
         self.ema.update()
         # set log
         self.log_dict["base_loss"] = base_loss.item()

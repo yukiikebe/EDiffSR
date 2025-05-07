@@ -2,8 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, reduce
+import os
 
 from .module_util import SinusoidalPosEmb, LayerNorm, exists
+from torchvision.utils import save_image
+
+import sys
+sys.path.append('/home/yuki/EDiffSR/external/UNO')
+from navier_stokes_uno2d import UNO, UNO_S256
 
 
 class SimpleGate(nn.Module):
@@ -164,12 +170,13 @@ class ResidualGroup(nn.Module):
 
 class ConditionalNAFNet(nn.Module):
 
-    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upscale=1):
+    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upscale=1, uno_model=None):
         super().__init__()
         self.upscale = upscale
         fourier_dim = width
         sinu_pos_emb = SinusoidalPosEmb(fourier_dim)
         time_dim = width * 4
+        self.uno_model = uno_model
 
         self.time_mlp = nn.Sequential(
             sinu_pos_emb,
@@ -226,11 +233,40 @@ class ConditionalNAFNet(nn.Module):
 
     def forward(self, inp, cond, time):
         inp_res = inp.clone()
-
+        
+        # Save input and condition as images for debugging
+        # output_dir = os.path.expanduser("~/EDiffSR/output_images")
+        # if not os.path.exists(output_dir):
+        #     os.makedirs(output_dir, exist_ok=True)
+        # print("shape cond", cond.shape)
+        # print("shape inp", inp.shape)
+        # img_rgb = cond[0, :3, :, :]  # shape: [3, 256, 256]
+        # if img_rgb.max() > 1.0:
+        #     img_rgb = img_rgb.float() / 255.0
+        # save_image(img_rgb, os.path.join(output_dir, "condition_image_rgb.png"))
+        # raise RuntimeError("Debug stop after saving condition image.")
+        
         if isinstance(time, int) or isinstance(time, float):
             time = torch.tensor([time]).to(inp.device)
-
+    
         x = inp - cond
+        print("shape inp", inp.shape)
+        output_dir = os.path.expanduser("~/EDiffSR/output_images")
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+        img_rgb_x = x[0, :3, :, :]
+        inp_rgb = inp[0, :3, :, :] 
+        img_rgb = cond[0, :3, :, :]  # shape: [3, 256, 256]
+        if img_rgb_x.max() > 1.0:
+            img_rgb_x = img_rgb_x.float() / 255.0
+        if inp_rgb.max() > 1.0:
+            inp_rgb = inp_rgb.float() / 255.0
+        if img_rgb.max() > 1.0:
+            img_rgb = img_rgb.float() / 255.0
+        save_image(img_rgb, os.path.join(output_dir, "condition_image_cond.png"))
+        save_image(inp_rgb, os.path.join(output_dir, "input_image_inp_res_rgb.png"))
+        save_image(img_rgb_x, os.path.join(output_dir, "condition_image_x_before_ending.png"))
+    
         x = torch.cat([x, cond], dim=1)
 
         t = self.time_mlp(time)
@@ -259,6 +295,14 @@ class ConditionalNAFNet(nn.Module):
             x, _ = decoder([x, t])
 
         x = self.ending(x)
+        # print(f" - Output from ending: {x.shape}")
+        
+        if self.uno_model is not None:
+            cond_input = cond.permute(0, 2, 3, 1)
+            uno_out = self.uno_model(cond_input).permute(0, 3, 1, 2)
+            # print(f" - UNO output shape: {uno_out.shape}")
+            x = x + uno_out
+            # print(f" - Output after UNO: {x.shape}")
         
         x = x[..., :H, :W]
         return x

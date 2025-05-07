@@ -6,12 +6,24 @@ from models import modules as M
 
 logger = logging.getLogger("base")
 
+import sys
+sys.path.append('/home/yuki/EDiffSR/external/UNO')
+from navier_stokes_uno2d import UNO, UNO_S256
+
 # Generator
 def define_G(opt):
     opt_net = opt["network_G"]
     which_model = opt_net["which_model_G"]
     setting = opt_net["setting"]
-    netG = getattr(M, which_model)(**setting)
+    if which_model == "ConditionalNAFNet":
+        uno = UNO(
+            in_width=opt_net.get("uno_in_width", 12),
+            width=opt_net.get("uno_width", 32),
+        )
+        netG = getattr(M, which_model)(**setting, uno_model=uno)
+    else:
+        netG = getattr(M, which_model)(**setting)
+
     return netG
 
 

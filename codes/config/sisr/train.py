@@ -74,7 +74,8 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate', resume='must', id='xntxsdld')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGB_latest_dataset')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
         wandb.config.update(opt, allow_val_change=True)
 
@@ -336,8 +337,8 @@ def main():
                     #     print(f"output channel before {channel} min:", visuals["Output"][channel, :, :].min())
                     #     print(f"output channel before {channel} max:", visuals["Output"][channel, :, :].max())
 
-                    print(visuals["Output"].shape)
-                    print(visuals["GT"].shape)
+                    # print(visuals["Output"].shape)
+                    # print(visuals["GT"].shape)
                     
                     if visuals["Output"].shape[0] > 3:
                         # output = visuals["Output"].squeeze().cpu().numpy()
@@ -404,17 +405,28 @@ def main():
                         cv2.imwrite(save_name, output)
             
                     else:      
-                        output = util.tensor2img(visuals["Output"].squeeze())  # uint8
-                        gt_img = util.tensor2img(visuals["GT"].squeeze())  # uint8
+                        output = util.tensor2img(visuals["Output"].squeeze(), out_type=np.float32)  # float32
+                        # for channel in range(output.shape[2]):
+                        #     print(f"output channel {channel} min:", output[:, :, channel].min())
+                        #     print(f"output channel {channel} max:", output[:, :, channel].max())
+                        gt_img = util.tensor2img(visuals["GT"].squeeze(), out_type=np.float32)  # uint8
+                        # for channel in range(gt_img.shape[2]):
+                        #     print(f"output channel {channel} min:", gt_img[:, :, channel].min())
+                        #     print(f"output channel {channel} max:", gt_img[:, :, channel].max())
+                        avg_tmp_psnr, each_channels_psnrs = util.calculate_psnr(output, gt_img)
+                        avg_psnr += avg_tmp_psnr
+                        for i in range(len(each_channels_psnrs)):
+                            each_channels_psnrs_avg[i].append(each_channels_psnrs[i])
+                            
+                        output = util.tensor2img(visuals["Output"].squeeze(), out_type=np.uint8)  # uint8
+                        gt_img = util.tensor2img(visuals["GT"].squeeze(), out_type=np.uint8)  # uint8
 
                         # save the validation results
                         save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
                         util.mkdirs(save_path)
                         save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
                         util.save_img(output, save_name)
-
-                        # calculate PSNR
-                        avg_psnr += util.calculate_psnr(output, gt_img)
+                        
                     idx += 1
 
                 avg_psnr = avg_psnr / idx
