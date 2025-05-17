@@ -64,3 +64,5 @@ results/yuki/
 tmp.py
 tmp/
 output_images/
+codes/config/sisr/models/modules/__pycache__/DenoisingNAFNet_arch.cpython-39.pyc
+codes/config/sisr/models/__pycache__/denoising_model.cpython-39.pyc

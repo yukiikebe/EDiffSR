@@ -233,39 +233,27 @@ class ConditionalNAFNet(nn.Module):
 
     def forward(self, inp, cond, time):
         inp_res = inp.clone()
-        
-        # Save input and condition as images for debugging
-        # output_dir = os.path.expanduser("~/EDiffSR/output_images")
-        # if not os.path.exists(output_dir):
-        #     os.makedirs(output_dir, exist_ok=True)
-        # print("shape cond", cond.shape)
-        # print("shape inp", inp.shape)
-        # img_rgb = cond[0, :3, :, :]  # shape: [3, 256, 256]
-        # if img_rgb.max() > 1.0:
-        #     img_rgb = img_rgb.float() / 255.0
-        # save_image(img_rgb, os.path.join(output_dir, "condition_image_rgb.png"))
-        # raise RuntimeError("Debug stop after saving condition image.")
-        
+                
         if isinstance(time, int) or isinstance(time, float):
             time = torch.tensor([time]).to(inp.device)
     
         x = inp - cond
-        print("shape inp", inp.shape)
-        output_dir = os.path.expanduser("~/EDiffSR/output_images")
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
-        img_rgb_x = x[0, :3, :, :]
-        inp_rgb = inp[0, :3, :, :] 
-        img_rgb = cond[0, :3, :, :]  # shape: [3, 256, 256]
-        if img_rgb_x.max() > 1.0:
-            img_rgb_x = img_rgb_x.float() / 255.0
-        if inp_rgb.max() > 1.0:
-            inp_rgb = inp_rgb.float() / 255.0
-        if img_rgb.max() > 1.0:
-            img_rgb = img_rgb.float() / 255.0
-        save_image(img_rgb, os.path.join(output_dir, "condition_image_cond.png"))
-        save_image(inp_rgb, os.path.join(output_dir, "input_image_inp_res_rgb.png"))
-        save_image(img_rgb_x, os.path.join(output_dir, "condition_image_x_before_ending.png"))
+        # print("shape inp", inp.shape)
+        # output_dir = os.path.expanduser("~/EDiffSR/output_images")
+        # if not os.path.exists(output_dir):
+        #     os.makedirs(output_dir, exist_ok=True)
+        # img_rgb_x = x[0, :3, :, :]
+        # inp_rgb = inp[0, :3, :, :] 
+        # img_rgb = cond[0, :3, :, :]  # shape: [3, 256, 256]
+        # if img_rgb_x.max() > 1.0:
+        #     img_rgb_x = img_rgb_x.float() / 255.0
+        # if inp_rgb.max() > 1.0:
+        #     inp_rgb = inp_rgb.float() / 255.0
+        # if img_rgb.max() > 1.0:
+        #     img_rgb = img_rgb.float() / 255.0
+        # save_image(img_rgb, os.path.join(output_dir, "condition_image_cond.png"))
+        # save_image(inp_rgb, os.path.join(output_dir, "input_image_inp_res_rgb.png"))
+        # save_image(img_rgb_x, os.path.join(output_dir, "condition_image_x_before_ending.png"))
     
         x = torch.cat([x, cond], dim=1)
 
