@@ -11,6 +11,8 @@ import sys
 sys.path.append('/home/yuki/EDiffSR/external/UNO')
 from navier_stokes_uno2d import UNO, UNO_S256
 
+sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer/libs')
+from model import SimpleTransformerEncorderOnly
 
 class SimpleGate(nn.Module):
     def forward(self, x):
@@ -170,13 +172,15 @@ class ResidualGroup(nn.Module):
 
 class ConditionalNAFNet(nn.Module):
 
-    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upscale=1, uno_model=None):
+    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upscale=1, uno_whole_image=None,uno_patch=None,galerkin_encorder=None):
         super().__init__()
         self.upscale = upscale
         fourier_dim = width
         sinu_pos_emb = SinusoidalPosEmb(fourier_dim)
         time_dim = width * 4
-        self.uno_model = uno_model
+        self.uno_whole_image = uno_whole_image
+        self.uno_patch = uno_patch
+        self.galerkin_encorder = galerkin_encorder
 
         self.time_mlp = nn.Sequential(
             sinu_pos_emb,
@@ -188,8 +192,11 @@ class ConditionalNAFNet(nn.Module):
         self.intro = nn.Conv2d(in_channels=img_channel*2, out_channels=width, kernel_size=3, padding=1, stride=1, groups=1,
                               bias=True)
         self.enhance = RCAB(num_feat=width)
-
-        self.ending = nn.Conv2d(in_channels=width, out_channels=img_channel, kernel_size=3, padding=1, stride=1, groups=1,
+        
+        ################## fix input size
+        # self.ending = nn.Conv2d(in_channels=width, out_channels=img_channel, kernel_size=3, padding=1, stride=1, groups=1,
+        #                       bias=True)
+        self.ending = nn.Conv2d(in_channels=width * 2, out_channels=img_channel, kernel_size=3, padding=1, stride=1, groups=1,
                               bias=True)
 
         self.encoders = nn.ModuleList()
@@ -238,30 +245,13 @@ class ConditionalNAFNet(nn.Module):
             time = torch.tensor([time]).to(inp.device)
     
         x = inp - cond
-        # print("shape inp", inp.shape)
-        # output_dir = os.path.expanduser("~/EDiffSR/output_images")
-        # if not os.path.exists(output_dir):
-        #     os.makedirs(output_dir, exist_ok=True)
-        # img_rgb_x = x[0, :3, :, :]
-        # inp_rgb = inp[0, :3, :, :] 
-        # img_rgb = cond[0, :3, :, :]  # shape: [3, 256, 256]
-        # if img_rgb_x.max() > 1.0:
-        #     img_rgb_x = img_rgb_x.float() / 255.0
-        # if inp_rgb.max() > 1.0:
-        #     inp_rgb = inp_rgb.float() / 255.0
-        # if img_rgb.max() > 1.0:
-        #     img_rgb = img_rgb.float() / 255.0
-        # save_image(img_rgb, os.path.join(output_dir, "condition_image_cond.png"))
-        # save_image(inp_rgb, os.path.join(output_dir, "input_image_inp_res_rgb.png"))
-        # save_image(img_rgb_x, os.path.join(output_dir, "condition_image_x_before_ending.png"))
     
         x = torch.cat([x, cond], dim=1)
 
         t = self.time_mlp(time)
-
+        
         B, C, H, W = x.shape
         x = self.check_image_size(x)
-        # print(f" - Input to intro: {x.shape}")
 
         x = self.intro(x)
 
@@ -276,23 +266,65 @@ class ConditionalNAFNet(nn.Module):
             x = down(x)
 
         x, _ = self.middle_blks([x, t])
+        
 
         for decoder, up, enc_skip in zip(self.decoders, self.ups, encs[::-1]):
             x = up(x)
             x = x + enc_skip
             x, _ = decoder([x, t])
+            
+        x_feature = x.clone()
+        print(f" - Output from decoder: {x.shape}")
 
-        x = self.ending(x)
         # print(f" - Output from ending: {x.shape}")
         
-        if self.uno_model is not None:
+        if self.uno_whole_image is not None:
+            # for linear
+            # High frequency whole image
             cond_input = cond.permute(0, 2, 3, 1)
-            uno_out = self.uno_model(cond_input).permute(0, 3, 1, 2)
-            # print(f" - UNO output shape: {uno_out.shape}")
-            x = x + uno_out
-            # print(f" - Output after UNO: {x.shape}")
-        
+            uno_whole_image_out = self.uno_whole_image(cond_input).permute(0, 3, 1, 2) # use nn.linear
+            
+            # separate the cond into four parts
+            uno_patch_each_output = []
+            cond_patch = cond_input.chunk(4, dim=1)
+            for i in range(4):
+                uno_patch_each_output.append(self.uno_patch(cond_patch[i]))
+            uno_patch_out = torch.cat(uno_patch_each_output, dim=1).permute(0, 3, 1, 2)
+            print(f" - Output from UNO patch: {uno_patch_out.shape}")
+            uno_last_feature = torch.cat([uno_whole_image_out, uno_patch_out], dim=1)
+            print(f" - Output from UNO combine image: {uno_patch_out.shape}")
+            uno_last_feature_gelu = F.gelu(uno_last_feature)
+            print(f" - Output after gelu: {uno_last_feature_gelu.shape}")
+            
+            B, C, H, W = uno_last_feature_gelu.shape
+            uno_galerkin_input = uno_last_feature_gelu.permute(0, 2, 3, 1).reshape(B, H * W, C)
+            galerkin_out = self.galerkin_encorder(node=uno_galerkin_input, edge=None, pos=None)
+            print(f" - Output from galerkin: {galerkin_out.shape}")
+            B, N, C = galerkin_out.shape
+            H = W = int(N ** 0.5)
+            galerkin_output_reshape = galerkin_out.permute(0, 2, 1).reshape(B, C, H, W)
+            print(f" - Output from galerkin reshape: {galerkin_output_reshape.shape}")
+            
+            # concate EDiffSR and Galerkin feature after changing them frequency domain
+            x_fft = torch.fft.fft2(x_feature, norm="ortho")
+            galerkin_fft = torch.fft.fft2(galerkin_output_reshape, norm="ortho")
+            fused_fft = torch.cat([x_fft, galerkin_fft], dim=1)
+            fused_feature = torch.fft.ifft2(fused_fft, norm="ortho").real # for conv
+            print(f" - Output from fused feature: {fused_feature.shape}")
+
+            x = self.ending(fused_feature)
+        else:
+            x = self.ending(x)
         x = x[..., :H, :W]
+        
+        # print(f" - Output from ending: {x.shape}")
+        # # Save x as an RGB image in the tmp directory
+        # image_rgb = x[:, 0:3, :, :]  # Convert to [B, H, W, C]
+        # if image_rgb.dtype == torch.float32:
+        #     image_rgb = (image_rgb + 1) / 2.0
+        # for idx, img in enumerate(image_rgb):
+        #     save_image(img, f"/home/yuki/EDiffSR/tmp/output_{idx}.png", normalize=False)
+        
         return x
 
     def check_image_size(self, x):
@@ -301,4 +333,23 @@ class ConditionalNAFNet(nn.Module):
         mod_pad_w = (self.padder_size - w % self.padder_size) % self.padder_size
         x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h))
         return x
+    
+def add_coord_channels(x):
+    """
+    add x and y coordinates as additional channels to the input tensor
+    Input:
+        x: Tensor of shape [B, C, H, W]
+    Output:
+        Tensor of shape [B, C+2, H, W]
+    """
+    B, C, H, W = x.size()
+
+    # Create normalized coordinate grid from -1 to 1
+    x_coords = torch.linspace(-1, 1, W, device=x.device).view(1, 1, 1, W).expand(B, 1, H, W)
+    y_coords = torch.linspace(-1, 1, H, device=x.device).view(1, 1, H, 1).expand(B, 1, H, W)
+
+    # Concatenate as new channels
+    x_with_coords = torch.cat([x, x_coords, y_coords], dim=1)
+    return x_with_coords
+
 
