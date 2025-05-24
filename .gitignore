@@ -66,3 +66,12 @@ tmp/
 output_images/
 codes/config/sisr/models/modules/__pycache__/DenoisingNAFNet_arch.cpython-39.pyc
 codes/config/sisr/models/__pycache__/denoising_model.cpython-39.pyc
+codes/config/sisr/models/modules/DenoisingNAFNet_arch_copy.py
+external/UNO/test_results_RGB
+external/UNO/saved_images_edge
+external/UNO/Data Generation
+external/UNO/edge_weight
+external/UNO/__pycache__
+external/UNO/weights
+external/galerkin_transformer/data
+external/galerkin_transformer/eval
