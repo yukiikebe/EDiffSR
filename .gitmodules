@@ -1,6 +1,0 @@
-[submodule "external/UNO"]
-	path = external/UNO
-	url = https://github.com/ashiq24/UNO.git
-[submodule "external/galerkin-transformer"]
-	path = external/galerkin-transformer
-	url = https://github.com/scaomath/galerkin-transformer.git
