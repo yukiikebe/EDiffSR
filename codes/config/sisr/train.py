@@ -74,7 +74,8 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO', resume='must', id='93lh7l81')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_with_add_coord')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_High_High', resume='must', id='tdy6onuc')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGB_latest_dataset')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
         wandb.config.update(opt, allow_val_change=True)
@@ -361,7 +362,7 @@ def main():
                         util.mkdirs(save_path)
                         save_name = f"{save_path}/{idx:03d}_multi_channel.tif"
                         print(output.shape)
-                        if len(os.listdir(save_path)) < 100:    
+                        if len(os.listdir(save_path)) < 30:    
                             with rasterio.open(save_name, 'w', height=output.shape[0], width=output.shape[1], count=output.shape[2], dtype=output.dtype) as dst:
                                 for band in range(output.shape[2]):
                                     dst.write(output[:, :, band], band + 1)

@@ -105,12 +105,15 @@ class DenoisingModel(BaseModel):
         #     self.galerkin_attn = DataParallel(self.galerkin_attn)
         
         self.model = networks.define_G(opt).to(self.device)
+
         if opt["dist"]:
             self.model = DistributedDataParallel(
                 self.model, device_ids=[torch.cuda.current_device()]
             )
-        else:
-            self.model = DataParallel(self.model)
+        ###################################### chnage for avoiding bag for making weight become 5D
+        # else:
+            # self.model = DataParallel(self.model)
+        
         # print network
         # self.print_network()
         self.load()
@@ -410,244 +413,244 @@ class DenoisingModel(BaseModel):
         
         return masked_loss
     
-    def compute_uno_edge_loss_former(self, pred, target, step):
-        if pred.shape[1] >= 3:
-            pred_extract = kornia.color.rgb_to_grayscale(pred[:, :3, :, :])
-            target_extract = kornia.color.rgb_to_grayscale(target[:, :3, :, :])
+    # def compute_uno_edge_loss_former(self, pred, target, step):
+    #     if pred.shape[1] >= 3:
+    #         pred_extract = kornia.color.rgb_to_grayscale(pred[:, :3, :, :])
+    #         target_extract = kornia.color.rgb_to_grayscale(target[:, :3, :, :])
         
-        batch_size = pred.shape[0]
-        self.counter = 0
-        for i in range(batch_size):
-            if step % 100 == 0:
-                pred_img = pred_extract[i].detach().cpu()
-                target_img = target_extract[i].detach().cpu()
+    #     batch_size = pred.shape[0]
+    #     self.counter = 0
+    #     for i in range(batch_size):
+    #         if step % 100 == 0:
+    #             pred_img = pred_extract[i].detach().cpu()
+    #             target_img = target_extract[i].detach().cpu()
 
-                pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
-                target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
-                save_path_model_input_step = os.path.join(self.save_path_model_input, f"{step:05d}")
-                if not os.path.exists(save_path_model_input_step):
-                    os.makedirs(save_path_model_input_step)
+    #             pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
+    #             target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
+    #             save_path_model_input_step = os.path.join(self.save_path_model_input, f"{step:05d}")
+    #             if not os.path.exists(save_path_model_input_step):
+    #                 os.makedirs(save_path_model_input_step)
 
-                output_dir_pred = os.path.join(save_path_model_input_step, "SR_images")
-                output_dir_target = os.path.join(save_path_model_input_step, "GT_images")
+    #             output_dir_pred = os.path.join(save_path_model_input_step, "SR_images")
+    #             output_dir_target = os.path.join(save_path_model_input_step, "GT_images")
                 
-                os.makedirs(output_dir_pred, exist_ok=True)
-                os.makedirs(output_dir_target, exist_ok=True)
+    #             os.makedirs(output_dir_pred, exist_ok=True)
+    #             os.makedirs(output_dir_target, exist_ok=True)
                 
-                save_image(pred_img, os.path.join(output_dir_pred, f'pred_{self.counter}_{i}.png'))
-                save_image(target_img, os.path.join(output_dir_target, f'target_{self.counter}_{i}.png'))
-                if self.wandb_run is not None:
-                    if self.counter < 3:
-                        pred_img_wandb = (pred_img.squeeze().numpy() * 255).astype(np.uint8)
-                        target_img_wandb = (target_img.squeeze().numpy() * 255).astype(np.uint8)
-                        try:
-                            self.wandb_run.log({
-                                f"pred_{self.counter}_{i}": wandb.Image(pred_img_wandb),
-                                f"target_{self.counter}_{i}": wandb.Image(target_img_wandb),
-                            })
-                        except Exception as e:
-                            print("wandb log error: ", e)
-                            pass
+    #             save_image(pred_img, os.path.join(output_dir_pred, f'pred_{self.counter}_{i}.png'))
+    #             save_image(target_img, os.path.join(output_dir_target, f'target_{self.counter}_{i}.png'))
+    #             if self.wandb_run is not None:
+    #                 if self.counter < 3:
+    #                     pred_img_wandb = (pred_img.squeeze().numpy() * 255).astype(np.uint8)
+    #                     target_img_wandb = (target_img.squeeze().numpy() * 255).astype(np.uint8)
+    #                     try:
+    #                         self.wandb_run.log({
+    #                             f"pred_{self.counter}_{i}": wandb.Image(pred_img_wandb),
+    #                             f"target_{self.counter}_{i}": wandb.Image(target_img_wandb),
+    #                         })
+    #                     except Exception as e:
+    #                         print("wandb log error: ", e)
+    #                         pass
                     
-        # Sobel edge extraction
-        # pred_edges = kornia.filters.sobel(kornia.color.rgb_to_grayscale(pred[:, :3, :, :]))
-        # target_edges = kornia.filters.sobel(kornia.color.rgb_to_grayscale(target[:, :3, :, :]))
+    #     # Sobel edge extraction
+    #     # pred_edges = kornia.filters.sobel(kornia.color.rgb_to_grayscale(pred[:, :3, :, :]))
+    #     # target_edges = kornia.filters.sobel(kornia.color.rgb_to_grayscale(target[:, :3, :, :]))
         
-        normalize = True
+    #     normalize = True
         
-        pred_edges = kornia.filters.spatial_gradient(pred_extract, mode='sobel', order=1, normalized=normalize)
-        target_edges = kornia.filters.spatial_gradient(target_extract, mode='sobel', order=1, normalized=normalize)
+    #     pred_edges = kornia.filters.spatial_gradient(pred_extract, mode='sobel', order=1, normalized=normalize)
+    #     target_edges = kornia.filters.spatial_gradient(target_extract, mode='sobel', order=1, normalized=normalize)
 
-        uno_input = pred_edges.squeeze(1).permute(0, 2, 3, 1)
-        target_edges = target_edges.squeeze(1).permute(0, 2, 3, 1)
+    #     uno_input = pred_edges.squeeze(1).permute(0, 2, 3, 1)
+    #     target_edges = target_edges.squeeze(1).permute(0, 2, 3, 1)
         
-        # print("pred shape:", pred.shape)
-        # print("pred extract shape:", pred_extract.shape)
-        # print("pred_edges shape:", pred_edges.shape)
-        # print("uno_input shape:", uno_input.shape)
-        # print("target_edges shape:", target_edges.shape)
+    #     # print("pred shape:", pred.shape)
+    #     # print("pred extract shape:", pred_extract.shape)
+    #     # print("pred_edges shape:", pred_edges.shape)
+    #     # print("uno_input shape:", uno_input.shape)
+    #     # print("target_edges shape:", target_edges.shape)
         
-        uno_output = self.uno_model(uno_input)
-        target_edges = target_edges.permute(0, 3, 1, 2)
+    #     uno_output = self.uno_model(uno_input)
+    #     target_edges = target_edges.permute(0, 3, 1, 2)
 
-        if pred_edges.shape[1] == 2:
-            uno_output_magnitude = torch.sqrt(uno_output[:, 0] ** 2 + uno_output[:, 1] ** 2)
-            target_magnitude = torch.sqrt(target_edges[:, 0] ** 2 + target_edges[:, 1] ** 2)
-        else:
-            uno_output_magnitude = pred_edges.squeeze(1)
-            target_magnitude = target_edges.squeeze(1)
+    #     if pred_edges.shape[1] == 2:
+    #         uno_output_magnitude = torch.sqrt(uno_output[:, 0] ** 2 + uno_output[:, 1] ** 2)
+    #         target_magnitude = torch.sqrt(target_edges[:, 0] ** 2 + target_edges[:, 1] ** 2)
+    #     else:
+    #         uno_output_magnitude = pred_edges.squeeze(1)
+    #         target_magnitude = target_edges.squeeze(1)
         
-        threshold = 0.02
-        mask = (target_magnitude > threshold).float()
+    #     threshold = 0.02
+    #     mask = (target_magnitude > threshold).float()
         
-        # print("uno_output_magnitude: ", uno_output_magnitude.shape)
-        # print("target_magnitude: ", target_magnitude.shape)
+    #     # print("uno_output_magnitude: ", uno_output_magnitude.shape)
+    #     # print("target_magnitude: ", target_magnitude.shape)
         
         
-        if step % 100 == 0:
-            for i in range(batch_size):
-                pred_img = (uno_output_magnitude[i]).detach().cpu()
-                target_img = (target_magnitude[i]).detach().cpu() 
+    #     if step % 100 == 0:
+    #         for i in range(batch_size):
+    #             pred_img = (uno_output_magnitude[i]).detach().cpu()
+    #             target_img = (target_magnitude[i]).detach().cpu() 
                 
-                print("pred_img: ", pred_img.shape)
-                print("target_img: ", target_img.shape)
+    #             print("pred_img: ", pred_img.shape)
+    #             print("target_img: ", target_img.shape)
                 
-                assert pred_img.shape == target_img.shape, f"pred_img shape: {pred_img.shape}, target_img shape: {target_img.shape}"
+    #             assert pred_img.shape == target_img.shape, f"pred_img shape: {pred_img.shape}, target_img shape: {target_img.shape}"
                 
-                if pred_img.dtype == torch.float32:
-                    pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
-                    target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
+    #             if pred_img.dtype == torch.float32:
+    #                 pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
+    #                 target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
                               
-                save_path_model_input_edge = os.path.join(self.save_path_model_input, f"{step:05d}/edges")
-                if not os.path.exists(save_path_model_input_edge):
-                    os.makedirs(save_path_model_input_edge)
+    #             save_path_model_input_edge = os.path.join(self.save_path_model_input, f"{step:05d}/edges")
+    #             if not os.path.exists(save_path_model_input_edge):
+    #                 os.makedirs(save_path_model_input_edge)
                 
-                output_dir_pred = os.path.join(save_path_model_input_edge, "SR_edges")
-                output_dir_target = os.path.join(save_path_model_input_edge,"GT_edges")
-                os.makedirs(output_dir_pred, exist_ok=True)
-                os.makedirs(output_dir_target, exist_ok=True)
+    #             output_dir_pred = os.path.join(save_path_model_input_edge, "SR_edges")
+    #             output_dir_target = os.path.join(save_path_model_input_edge,"GT_edges")
+    #             os.makedirs(output_dir_pred, exist_ok=True)
+    #             os.makedirs(output_dir_target, exist_ok=True)
 
-                save_image(pred_img, os.path.join(output_dir_pred, f'pred_edge{self.counter}_{i}.png'))
-                save_image(target_img, os.path.join(output_dir_target, f'target_edge{self.counter}_{i}.png'))
+    #             save_image(pred_img, os.path.join(output_dir_pred, f'pred_edge{self.counter}_{i}.png'))
+    #             save_image(target_img, os.path.join(output_dir_target, f'target_edge{self.counter}_{i}.png'))
 
-                if self.wandb_run is not None:
-                    if self.counter < 3:
-                        pred_img_wandb = (pred_img.squeeze().numpy() * 255).astype(np.uint8)
-                        target_img_wandb = (target_img.squeeze().numpy() * 255).astype(np.uint8)
-                        self.wandb_run.log({
-                            f"pred_edge_{self.counter}_{i}": wandb.Image(pred_img_wandb),
-                            f"target_edge_{self.counter}_{i}": wandb.Image(target_img_wandb),
-                        })
-            self.counter += 1
+    #             if self.wandb_run is not None:
+    #                 if self.counter < 3:
+    #                     pred_img_wandb = (pred_img.squeeze().numpy() * 255).astype(np.uint8)
+    #                     target_img_wandb = (target_img.squeeze().numpy() * 255).astype(np.uint8)
+    #                     self.wandb_run.log({
+    #                         f"pred_edge_{self.counter}_{i}": wandb.Image(pred_img_wandb),
+    #                         f"target_edge_{self.counter}_{i}": wandb.Image(target_img_wandb),
+    #                     })
+    #         self.counter += 1
         
-        diff = torch.abs(uno_output_magnitude - target_magnitude)
-        masked_loss = (diff * mask).sum() / mask.sum().clamp(min=1e-8)
+    #     diff = torch.abs(uno_output_magnitude - target_magnitude)
+    #     masked_loss = (diff * mask).sum() / mask.sum().clamp(min=1e-8)
 
-        return masked_loss
+    #     return masked_loss
 
-    def compute_uno_edge_loss(self, pred, target, step):
-        B, C, H, W = pred.shape
-        pred_flatten = pred.permute(0, 2, 3, 1).reshape(B, H * W, C)
+    # def compute_uno_edge_loss(self, pred, target, step):
+    #     B, C, H, W = pred.shape
+    #     pred_flatten = pred.permute(0, 2, 3, 1).reshape(B, H * W, C)
         
-        pos = make_coord((H, W)).to(self.device)
-        pos = pos.expand(B, -1, -1)
-        print("pos: ", pos.shape)
+    #     pos = make_coord((H, W)).to(self.device)
+    #     pos = pos.expand(B, -1, -1)
+    #     print("pos: ", pos.shape)
         
-        pred_att = self.galerkin_attn(pred_flatten, pos=pos)
+    #     pred_att = self.galerkin_attn(pred_flatten, pos=pos)
         
-        print("pred_att: ", pred_att.shape)
-        # print("target_att: ", target_att.shape)
+    #     print("pred_att: ", pred_att.shape)
+    #     # print("target_att: ", target_att.shape)
         
-        pred_uno_input = pred_att.permute(0, 2, 1).reshape(B, H, W, C)
+    #     pred_uno_input = pred_att.permute(0, 2, 1).reshape(B, H, W, C)
         
-        target_uno_input = kornia.filters.sobel(kornia.color.rgb_to_grayscale(target[:, :3, :, :]))
+    #     target_uno_input = kornia.filters.sobel(kornia.color.rgb_to_grayscale(target[:, :3, :, :]))
 
-        print("pred_uno_input: ", pred_uno_input.shape)
-        print("target_uno_input: ", target_uno_input.shape)
+    #     print("pred_uno_input: ", pred_uno_input.shape)
+    #     print("target_uno_input: ", target_uno_input.shape)
         
-        pred_uno_output = self.uno_model(pred_uno_input)   
-        target_uno_output = self.uno_model(target_uno_input)
+    #     pred_uno_output = self.uno_model(pred_uno_input)   
+    #     target_uno_output = self.uno_model(target_uno_input)
         
-        # print("pred_uno_output: ", pred_uno_output.shape)
+    #     # print("pred_uno_output: ", pred_uno_output.shape)
         
-        pred_uno_edge = pred_uno_output.permute(0, 3, 1, 2)
-        target_uno_edge = target_uno_output.permute(0, 3, 1, 2)
+    #     pred_uno_edge = pred_uno_output.permute(0, 3, 1, 2)
+    #     target_uno_edge = target_uno_output.permute(0, 3, 1, 2)
         
-        #test for mask
-        # pred_extract = kornia.color.rgb_to_grayscale(pred[:, :3, :, :])
-        # target_extract = kornia.color.rgb_to_grayscale(target[:, :3, :, :])
+    #     #test for mask
+    #     # pred_extract = kornia.color.rgb_to_grayscale(pred[:, :3, :, :])
+    #     # target_extract = kornia.color.rgb_to_grayscale(target[:, :3, :, :])
         
-        # pred_uno_edge = kornia.filters.sobel(pred_extract)
-        # target_uno_edge = kornia.filters.sobel(target_extract)
+    #     # pred_uno_edge = kornia.filters.sobel(pred_extract)
+    #     # target_uno_edge = kornia.filters.sobel(target_extract)
         
-        # print("pred_uno_edge: ", pred_uno_edge.shape)
+    #     # print("pred_uno_edge: ", pred_uno_edge.shape)
         
-        batch_size = pred.shape[0]
-        self.counter = 0
-        for i in range(batch_size):
-            if step % 100 == 0:
-                pred_img = pred[i].detach().cpu()
-                target_img = target[i].detach().cpu()
+    #     batch_size = pred.shape[0]
+    #     self.counter = 0
+    #     for i in range(batch_size):
+    #         if step % 100 == 0:
+    #             pred_img = pred[i].detach().cpu()
+    #             target_img = target[i].detach().cpu()
 
-                pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
-                target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
-                save_path_model_input_step = os.path.join(self.save_path_model_input, f"{step:05d}")
-                if not os.path.exists(save_path_model_input_step):
-                    os.makedirs(save_path_model_input_step)
+    #             pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
+    #             target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
+    #             save_path_model_input_step = os.path.join(self.save_path_model_input, f"{step:05d}")
+    #             if not os.path.exists(save_path_model_input_step):
+    #                 os.makedirs(save_path_model_input_step)
 
-                output_dir_pred = os.path.join(save_path_model_input_step, "SR_images")
-                output_dir_target = os.path.join(save_path_model_input_step, "GT_images")
+    #             output_dir_pred = os.path.join(save_path_model_input_step, "SR_images")
+    #             output_dir_target = os.path.join(save_path_model_input_step, "GT_images")
                 
-                os.makedirs(output_dir_pred, exist_ok=True)
-                os.makedirs(output_dir_target, exist_ok=True)
+    #             os.makedirs(output_dir_pred, exist_ok=True)
+    #             os.makedirs(output_dir_target, exist_ok=True)
                 
-                save_image(pred_img[:3], os.path.join(output_dir_pred, f'pred_{self.counter}_{i}.png'))
-                save_image(target_img[:3], os.path.join(output_dir_target, f'target_{self.counter}_{i}.png'))
+    #             save_image(pred_img[:3], os.path.join(output_dir_pred, f'pred_{self.counter}_{i}.png'))
+    #             save_image(target_img[:3], os.path.join(output_dir_target, f'target_{self.counter}_{i}.png'))
 
-        if pred_uno_edge.shape[1] == 2:
-            uno_output_magnitude = torch.sqrt(pred_uno_edge[:, 0] ** 2 + pred_uno_edge[:, 1] ** 2)
-            target_magnitude = torch.sqrt(target_uno_edge[:, 0] ** 2 + target_uno_edge[:, 1] ** 2)
-        else:
-            uno_output_magnitude = torch.abs(pred_uno_edge.squeeze(1))
-            target_magnitude = torch.abs(target_uno_edge.squeeze(1))
+    #     if pred_uno_edge.shape[1] == 2:
+    #         uno_output_magnitude = torch.sqrt(pred_uno_edge[:, 0] ** 2 + pred_uno_edge[:, 1] ** 2)
+    #         target_magnitude = torch.sqrt(target_uno_edge[:, 0] ** 2 + target_uno_edge[:, 1] ** 2)
+    #     else:
+    #         uno_output_magnitude = torch.abs(pred_uno_edge.squeeze(1))
+    #         target_magnitude = torch.abs(target_uno_edge.squeeze(1))
         
-        threshold = 0.0
-        mask = (target_magnitude > threshold).float()
-        print("mask sum: ", mask.sum().item())
+    #     threshold = 0.0
+    #     mask = (target_magnitude > threshold).float()
+    #     print("mask sum: ", mask.sum().item())
         
-        print("uno_output_magnitude: ", uno_output_magnitude.shape)
-        print("target_magnitude: ", target_magnitude.shape)
-        print("mask: ", mask.shape)
-        print("target_magnitude min:", target_magnitude.min().item())
-        print("target_magnitude max:", target_magnitude.max().item())
+    #     print("uno_output_magnitude: ", uno_output_magnitude.shape)
+    #     print("target_magnitude: ", target_magnitude.shape)
+    #     print("mask: ", mask.shape)
+    #     print("target_magnitude min:", target_magnitude.min().item())
+    #     print("target_magnitude max:", target_magnitude.max().item())
 
         
-        uno_output_magnitude_mask = uno_output_magnitude * mask
-        target_magnitude_mask = target_magnitude * mask
+    #     uno_output_magnitude_mask = uno_output_magnitude * mask
+    #     target_magnitude_mask = target_magnitude * mask
         
-        if step % 100 == 0:
-            for i in range(batch_size):
-                pred_img = (uno_output_magnitude[i]).detach().cpu()
-                target_img = (target_magnitude[i]).detach().cpu()
-                pred_img_mask = (uno_output_magnitude_mask[i]).detach().cpu()
-                target_img_mask = (target_magnitude_mask[i]).detach().cpu() 
-                mask_img = (mask[i]).detach().cpu()
+    #     if step % 100 == 0:
+    #         for i in range(batch_size):
+    #             pred_img = (uno_output_magnitude[i]).detach().cpu()
+    #             target_img = (target_magnitude[i]).detach().cpu()
+    #             pred_img_mask = (uno_output_magnitude_mask[i]).detach().cpu()
+    #             target_img_mask = (target_magnitude_mask[i]).detach().cpu() 
+    #             mask_img = (mask[i]).detach().cpu()
                 
-                # print("pred_img: ", pred_img.shape)
-                # print("target_img: ", target_img.shape)
-                # print("pred_img_mask: ", pred_img_mask.shape)
-                # print("target_img_mask: ", target_img_mask.shape)
-                # print("mask_img: ", mask_img.shape)
+    #             # print("pred_img: ", pred_img.shape)
+    #             # print("target_img: ", target_img.shape)
+    #             # print("pred_img_mask: ", pred_img_mask.shape)
+    #             # print("target_img_mask: ", target_img_mask.shape)
+    #             # print("mask_img: ", mask_img.shape)
                 
-                assert pred_img.shape == target_img.shape, f"pred_img shape: {pred_img.shape}, target_img shape: {target_img.shape}"
+    #             assert pred_img.shape == target_img.shape, f"pred_img shape: {pred_img.shape}, target_img shape: {target_img.shape}"
                           
-                save_path_model_input_edge = os.path.join(self.save_path_model_input, f"{step:05d}/edges")
-                if not os.path.exists(save_path_model_input_edge):
-                    os.makedirs(save_path_model_input_edge)
+    #             save_path_model_input_edge = os.path.join(self.save_path_model_input, f"{step:05d}/edges")
+    #             if not os.path.exists(save_path_model_input_edge):
+    #                 os.makedirs(save_path_model_input_edge)
                 
-                output_dir_pred = os.path.join(save_path_model_input_edge, "SR_edges")
-                output_dir_target = os.path.join(save_path_model_input_edge,"GT_edges")
-                output_dir_pred_mask = os.path.join(save_path_model_input_edge, "SR_edges_mask")
-                output_dir_target_mask = os.path.join(save_path_model_input_edge,"GT_edges_mask")
-                output_dir_mask = os.path.join(save_path_model_input_edge,"mask")
-                os.makedirs(output_dir_pred, exist_ok=True)
-                os.makedirs(output_dir_target, exist_ok=True)
-                os.makedirs(output_dir_pred_mask, exist_ok=True)
-                os.makedirs(output_dir_target_mask, exist_ok=True)
-                os.makedirs(output_dir_mask, exist_ok=True)
+    #             output_dir_pred = os.path.join(save_path_model_input_edge, "SR_edges")
+    #             output_dir_target = os.path.join(save_path_model_input_edge,"GT_edges")
+    #             output_dir_pred_mask = os.path.join(save_path_model_input_edge, "SR_edges_mask")
+    #             output_dir_target_mask = os.path.join(save_path_model_input_edge,"GT_edges_mask")
+    #             output_dir_mask = os.path.join(save_path_model_input_edge,"mask")
+    #             os.makedirs(output_dir_pred, exist_ok=True)
+    #             os.makedirs(output_dir_target, exist_ok=True)
+    #             os.makedirs(output_dir_pred_mask, exist_ok=True)
+    #             os.makedirs(output_dir_target_mask, exist_ok=True)
+    #             os.makedirs(output_dir_mask, exist_ok=True)
                 
-                save_image(pred_img, os.path.join(output_dir_pred, f'pred_edge{self.counter}_{i}.png'))
-                save_image(target_img, os.path.join(output_dir_target, f'target_edge{self.counter}_{i}.png'))
-                save_image(pred_img_mask, os.path.join(output_dir_pred_mask, f'pred_edge_mask{self.counter}_{i}.png'))
-                save_image(target_img_mask, os.path.join(output_dir_target_mask, f'target_edge_mask{self.counter}_{i}.png'))
-                save_image(mask_img.squeeze(0), os.path.join(output_dir_mask, f'mask{self.counter}_{i}.png'))
+    #             save_image(pred_img, os.path.join(output_dir_pred, f'pred_edge{self.counter}_{i}.png'))
+    #             save_image(target_img, os.path.join(output_dir_target, f'target_edge{self.counter}_{i}.png'))
+    #             save_image(pred_img_mask, os.path.join(output_dir_pred_mask, f'pred_edge_mask{self.counter}_{i}.png'))
+    #             save_image(target_img_mask, os.path.join(output_dir_target_mask, f'target_edge_mask{self.counter}_{i}.png'))
+    #             save_image(mask_img.squeeze(0), os.path.join(output_dir_mask, f'mask{self.counter}_{i}.png'))
                 
-            self.counter += 1
+    #         self.counter += 1
         
-        diff = torch.abs(uno_output_magnitude - target_magnitude)
-        masked_loss = (diff * mask).sum() / mask.sum().clamp(min=1e-8)
+    #     diff = torch.abs(uno_output_magnitude - target_magnitude)
+    #     masked_loss = (diff * mask).sum() / mask.sum().clamp(min=1e-8)
 
-        return masked_loss
+    #     return masked_loss
 
     
     def test(self, sde=None, save_states=False):

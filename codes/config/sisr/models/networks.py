@@ -10,17 +10,30 @@ import sys
 sys.path.append('/home/yuki/EDiffSR/external/UNO')
 from navier_stokes_uno2d import UNO, UNO_S256
 
+sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer/libs')
+from model import SimpleTransformerEncorderOnly
+
 # Generator
 def define_G(opt):
     opt_net = opt["network_G"]
     which_model = opt_net["which_model_G"]
     setting = opt_net["setting"]
     if which_model == "ConditionalNAFNet":
-        uno = UNO(
-            in_width=opt_net.get("uno_in_width", 12),
-            width=opt_net.get("uno_width", 32),
-        )
-        netG = getattr(M, which_model)(**setting, uno_model=uno)
+        if opt_net.get("use_uno", False):
+            uno_whole_image = UNO(
+                in_width=opt_net.get("uno_in_width", 12),
+                width=opt_net.get("uno_width", 32),
+                region = "low"
+            )
+            uno_patch = UNO(
+                in_width=opt_net.get("uno_in_width", 12),
+                width=opt_net.get("uno_width", 32),
+                region = "all"
+            )
+            transformer_config = opt_net.get("galerkin_transformer_setting", {})
+            galerkin_encorder = SimpleTransformerEncorderOnly(**transformer_config)
+            
+        netG = getattr(M, which_model)(**setting, uno_whole_image=uno_whole_image, uno_patch=uno_patch,galerkin_encorder=galerkin_encorder)
     else:
         netG = getattr(M, which_model)(**setting)
 
