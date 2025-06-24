@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer/libs')
+sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
 # from galerkin_transformer.layers import *
 # from galerkin_transformer.utils import *
 # from galerkin_transformer.utils_ft import *

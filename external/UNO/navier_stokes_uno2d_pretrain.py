@@ -185,10 +185,10 @@ class UNO(nn.Module):
             int(4 * factor * self.width), self.width, 64, 64, 22, 22
         )  # will be reshaped
 
-        # self.fc1 = nn.Linear(2 * self.width, 4 * self.width)
-        # self.fc2 = nn.Linear(4 * self.width, 3)
-        self.fc1 = nn.Conv2d(2 * self.width, 4 * self.width, kernel_size=1)
-        self.fc2 = nn.Conv2d(4 * self.width, 3, kernel_size=1)
+        self.fc1 = nn.Linear(2 * self.width, 4 * self.width)
+        self.fc2 = nn.Linear(4 * self.width, 3)
+        # self.fc1 = nn.Conv2d(2 * self.width, 4 * self.width, kernel_size=1)
+        # self.fc2 = nn.Conv2d(4 * self.width, 3, kernel_size=1)
     
     def get_grid(self, shape, device):
         batchsize, size_x, size_y = shape[0], shape[1], shape[2]

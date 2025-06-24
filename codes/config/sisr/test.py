@@ -15,7 +15,6 @@ from IPython import embed
 
 import options as option
 from models import create_model
-
 sys.path.insert(0, "../../")
 import utils as util
 from data import create_dataloader, create_dataset
@@ -113,7 +112,8 @@ for test_loader in test_loaders:
     logger.info("\nTesting [{:s}]...".format(test_set_name))
     test_start_time = time.time()
     dataset_dir = os.path.join(opt["path"]["results_root"], test_set_name)
-    util.mkdir(dataset_dir)
+    if not os.path.exists(dataset_dir):
+        util.mkdir(dataset_dir)
 
     test_results = OrderedDict()
     test_results["psnr"] = []
@@ -123,6 +123,9 @@ for test_loader in test_loaders:
     test_results["lpips"] = [] 
     test_results["DISTS"] = []
     test_times = []
+    dists = DISTS()
+    dists = dists.cuda()
+    loss_fn_vgg = lpips.LPIPS(net="vgg").to(device)
     for i, test_data in enumerate(test_loader):
         single_img_psnr = []
         single_img_ssim = []
@@ -130,6 +133,7 @@ for test_loader in test_loaders:
         single_img_ssim_y = []
         need_GT = False if test_loader.dataset.opt["dataroot_GT"] is None else True
         img_path = test_data["GT_path"][0] if need_GT else test_data["LQ_path"][0]
+        category = os.path.basename(os.path.dirname(img_path))
         img_name = os.path.splitext(os.path.basename(img_path))[0]
 
         #### input dataset_LQ
@@ -150,43 +154,40 @@ for test_loader in test_loaders:
         SR_img = visuals["Output"]
         output = SR_img
     
-        output = util.tensor2img(SR_img.squeeze())  # uint8
-        LQ_ = util.tensor2img(visuals["Input"].squeeze())  
-        HR_ = util.tensor2img(visuals["GT"].squeeze())  
-        print(f"Type of output: {type(output)}")
+        output = util.tensor2img(SR_img.squeeze(), out_type=np.float32)
         # calculate PSNR and SSIM
         if need_GT:
             # GT = util.tensor2img(GT.squeeze())
-            GT = util.tensor2img(visuals["GT"].squeeze())
-            print("shape", output.shape)
-            print("shape", GT.shape)
-            psnr = util.calculate_psnr(output, GT)
+            GT = util.tensor2img(visuals["GT"].squeeze(), out_type=np.float32)
+            
+            psnr, _ = util.calculate_psnr(output, GT)
             ssim = util.calculate_ssim(output, GT)
             psnr_y = util.calculate_psnr(bgr2ycbcr(output), bgr2ycbcr(GT))
             ssim_y = util.calculate_ssim(bgr2ycbcr(output), bgr2ycbcr(GT))
-            # lpips = util.calculate_lpips(output, GT)
-            output_tensor = visuals["Output"].unsqueeze(0).to(device) if visuals["Output"].ndimension() == 3 else visuals["Output"].to(device)
-            HR_tensor = visuals["GT"].unsqueeze(0).to(device) if visuals["GT"].ndimension() == 3 else visuals["GT"].to(device)
             
-            # dists = util.calculate_dists(GT, GT)
             test_results["psnr"].append(psnr)
             test_results["ssim"].append(ssim)
             test_results["psnr_y"].append(psnr_y)
             test_results["ssim_y"].append(ssim_y)
             
-            dists = DISTS()
-            dists = dists.cuda()
+            print("visual output", visuals["Output"].shape)
+            output_tensor = visuals["Output"].unsqueeze(0).to(device) if visuals["Output"].ndimension() == 3 else visuals["Output"].to(device)
+            HR_tensor = visuals["GT"].unsqueeze(0).to(device) if visuals["GT"].ndimension() == 3 else visuals["GT"].to(device)
+            
+            output_tensor = output_tensor.clamp(0, 1)  
+            HR_tensor = HR_tensor.clamp(0, 1)
+
+            # range [0,1]
             dists_score = dists(output_tensor, HR_tensor)
             test_results["DISTS"].append(dists_score.item())
             
-            loss_fn_vgg = lpips.LPIPS(net="vgg").to(device)
-            mean = [0.5, 0.5, 0.5]
-            std = [0.5, 0.5, 0.5]
-            normalize(HR_tensor, mean, std, inplace=True)
-            normalize(output_tensor, mean, std, inplace=True)
-            lpips_score = loss_fn_vgg(output_tensor, HR_tensor)
+            #range [-1,1]
+            output_tensor_twice_range = output_tensor * 2 - 1
+            HR_tensor_twice_range = HR_tensor * 2 - 1
+            print("output_tensor_twice_range", output_tensor_twice_range.shape)
+            print("output_tensor_twice_range", output_tensor_twice_range.min(), output_tensor_twice_range.max())
+            lpips_score = loss_fn_vgg(output_tensor_twice_range, HR_tensor_twice_range)
             test_results["lpips"].append(lpips_score.item())
-            
             
             logger.info(
                 "{:3d} - {:25} - PSNR: {:.6f} dB; SSIM: {:.6f}; PSNR_Y: {:.6f} dB; SSIM_Y: {:.6f}; LPIPS: {:.6f}; DISTS: {:.6f}".format(
@@ -216,12 +217,13 @@ for test_loader in test_loaders:
         # output_img = Image.fromarray(output_img)  # Convert NumPy array to PIL image
         # output_img.save(os.path.join(dataset_dir, f"{img_name}_1.png"))
         # print("shape", output.shape)
-        output_np = output.cpu().numpy()
-        print("dtype", output_np.dtype)
+        output_int = util.tensor2img(visuals["Output"].squeeze(), out_type=np.uint8)
+        output_np = output_int
+
         if output_np.shape[0] == 7:
             output_np = np.moveaxis(output_np, 0, -1)
             save_img_path = os.path.join(dataset_dir, img_name + ".tif")
-            print("shape", output_np.shape)
+
             if output_np.dtype in [np.float32, np.float64]:
                 output_np = (output_np * 65535).astype(np.uint16)
             with rasterio.open(
@@ -252,39 +254,42 @@ for test_loader in test_loaders:
                 img_rgb = Image.fromarray(output_np, 'RGB')
                 img_rgb.save(os.path.join(dataset_dir, img_name + ".png"))
         else:
+            save_dir = os.path.join(opt["path"]["results_root"], test_set_name, category)
+            if not os.path.exists(save_dir):
+                util.mkdir(save_dir)
             if suffix:
-                save_img_path = os.path.join(dataset_dir, img_name + suffix + ".png")
+                save_img_path = os.path.join(save_dir, img_name + suffix + ".png")
             else:
-                save_img_path = os.path.join(dataset_dir, img_name + ".png")
-            util.save_img(output, save_img_path)
+                save_img_path = os.path.join(save_dir, img_name + ".png")
+            util.save_img(output_int, save_img_path)
 
-        if need_GT:
-            hr_fid_dir = os.path.join(dataset_dir, 'fid_HR')
-            sr_fid_dir = os.path.join(dataset_dir, 'fid_SR')
+        # if need_GT:
+        #     hr_fid_dir = os.path.join(dataset_dir, 'fid_HR')
+        #     sr_fid_dir = os.path.join(dataset_dir, 'fid_SR')
             
-            if os.path.exists(hr_fid_dir):
-                shutil.rmtree(hr_fid_dir)  # Remove existing directory
-            os.makedirs(hr_fid_dir, exist_ok=True)
+        #     if os.path.exists(hr_fid_dir):
+        #         shutil.rmtree(hr_fid_dir)  # Remove existing directory
+        #     os.makedirs(hr_fid_dir, exist_ok=True)
 
-            if os.path.exists(sr_fid_dir):
-                shutil.rmtree(sr_fid_dir)  # Remove existing directory
-            os.makedirs(sr_fid_dir, exist_ok=True)
+        #     if os.path.exists(sr_fid_dir):
+        #         shutil.rmtree(sr_fid_dir)  # Remove existing directory
+        #     os.makedirs(sr_fid_dir, exist_ok=True)
             
-            hr_save_path = os.path.join(hr_fid_dir, f'{img_name}.png')
-            print(f"HR Save Path: {hr_save_path}")
-            sr_save_path = os.path.join(sr_fid_dir, f'{img_name}.png')
-            print(f"SR Save Path: {sr_save_path}")
-            # Save GT and SR images
-            save_preprocessed_image(HR_, hr_save_path)
-            save_preprocessed_image(output, sr_save_path)
+        #     hr_save_path = os.path.join(hr_fid_dir, f'{img_name}.png')
+        #     print(f"HR Save Path: {hr_save_path}")
+        #     sr_save_path = os.path.join(sr_fid_dir, f'{img_name}.png')
+        #     print(f"SR Save Path: {sr_save_path}")
+        #     # Save GT and SR images
+        #     save_preprocessed_image(HR_, hr_save_path)
+        #     save_preprocessed_image(output, sr_save_path)
             
-            fid_value = fid_score.calculate_fid_given_paths(
-                [hr_fid_dir, sr_fid_dir],  # Directories containing GT and SR images
-                batch_size=50,             # Adjust based on your GPU memory
-                device='cuda:0',           # Use GPU if available
-                dims=2048                  # Standard FID Inception feature dimensions
-            )
-            logger.info(f"FID Score: {fid_value}")
-            print(f"FID Score: {fid_value}")
+        #     fid_value = fid_score.calculate_fid_given_paths(
+        #         [hr_fid_dir, sr_fid_dir],  # Directories containing GT and SR images
+        #         batch_size=50,             # Adjust based on your GPU memory
+        #         device='cuda:0',           # Use GPU if available
+        #         dims=2048                  # Standard FID Inception feature dimensions
+        #     )
+        #     logger.info(f"FID Score: {fid_value}")
+        #     print(f"FID Score: {fid_value}")
         
     print(f"average test time: {np.mean(test_times):.4f}")

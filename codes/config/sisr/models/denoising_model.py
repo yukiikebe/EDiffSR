@@ -24,7 +24,7 @@ import wandb
 from torchvision.utils import save_image
 
 import sys
-sys.path.append('/home/yuki/EDiffSR/external/UNO')
+sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
 from navier_stokes_uno2d import UNO, UNO_S256
 
 # sys.path.append('/home/yuki/EDiffSR/external/galerkin_transformer/libs')
@@ -302,7 +302,7 @@ class DenoisingModel(BaseModel):
                 pred_img = (pred_img - pred_img.min()) / (pred_img.max() - pred_img.min() + 1e-8)
                 target_img = (target_img - target_img.min()) / (target_img.max() - target_img.min() + 1e-8)
 
-                step_dir = f"/home/yuki/EDiffSR/codes/config/sisr/model_input_images/step_{step:05d}"
+                step_dir = f"/home/yuki/research/EDiffSR/codes/config/sisr/model_input_images/step_{step:05d}"
 
                 output_dir_pred = os.path.join(step_dir, "SR_images")
                 output_dir_target = os.path.join(step_dir, "GT_images")
@@ -379,35 +379,26 @@ class DenoisingModel(BaseModel):
                 pred_img = (pred_magnitude[i]).detach().cpu()
                 target_img = (target_magnitude[i]).detach().cpu()
                 
-                step_edge_dir = f"/home/yuki/EDiffSR/codes/config/sisr/model_input_images/step_{step:05d}/edges"
+                step_edge_dir = f"/home/yuki/research/EDiffSR/codes/config/sisr/model_input_images/step_{step:05d}/edges"
                 if not os.path.exists(step_edge_dir):
                     os.makedirs(step_edge_dir)
                 
                 output_dir_pred = os.path.join(step_edge_dir, "./model_input_images/SR_edges")
                 output_dir_target = os.path.join(step_edge_dir,"./model_input_images/GT_edges")
-                # output_dir_output = os.path.join(step_edge_dir,"./model_input_images/output_edges")
-                # output_dir_state0 = os.path.join(step_edge_dir,"./model_input_images/state0_edges")
+    
                 os.makedirs(output_dir_pred, exist_ok=True)
                 os.makedirs(output_dir_target, exist_ok=True)
-                # os.makedirs(output_dir_output, exist_ok=True)
-                # os.makedirs(output_dir_state0, exist_ok=True)
 
                 save_image(pred_img, os.path.join(output_dir_pred, f'pred_edge{self.counter}_{i}.png'))
                 save_image(target_img, os.path.join(output_dir_target, f'target_edge{self.counter}_{i}.png'))
-                # save_image(output_magnitude, os.path.join(output_dir_output, f'output_edge{self.counter}_{i}.png'))
-                # save_image(state_0_magnitude, os.path.join(output_dir_state0, f'state0_edge{self.counter}_{i}.png'))
 
                 if self.wandb_run is not None:
                     if self.counter < 3:
                         pred_img_wandb = (pred_img.squeeze().numpy() * 255).astype(np.uint8)
                         target_img_wandb = (target_img.squeeze().numpy() * 255).astype(np.uint8)
-                        # state_0_img_wandb = (state_0_magnitude.squeeze().numpy() * 255).astype(np.uint8)
-                        # output_img_wandb = (output_magnitude.squeeze().numpy() * 255).astype(np.uint8)
                         self.wandb_run.log({
                             f"pred_edge_{self.counter}_{i}": wandb.Image(pred_img_wandb),
                             f"target_edge_{self.counter}_{i}": wandb.Image(target_img_wandb),
-                            # f"state0_edge_{self.counter}_{i}": wandb.Image(state_0_img_wandb),
-                            # f"output_edge_{self.counter}_{i}": wandb.Image(output_img_wandb)
                         })
             self.counter += 1
         

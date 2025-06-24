@@ -74,9 +74,9 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_with_add_coord')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='Baseline_UNO_Galerkin_fix_patch_ver')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_High_High', resume='must', id='tdy6onuc')
-        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGB_latest_dataset')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO_Galerkin_AID_vr3')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
         wandb.config.update(opt, allow_val_change=True)
 
@@ -252,6 +252,13 @@ def main():
 
     sde = util.IRSDE(max_sigma=opt["sde"]["max_sigma"], T=opt["sde"]["T"], schedule=opt["sde"]["schedule"], eps=opt["sde"]["eps"], device=device)
     sde.set_model(model.model)
+    
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    total_params = count_parameters(model.model)
+    print(f"Total trainable parameters: {total_params:,} ({total_params / 1e6:.2f}M)")
+    logger.info(f"Total trainable parameters: {total_params:,} ({total_params / 1e6:.2f}M)")
 
     scale = opt['degradation']['scale']
 
@@ -362,7 +369,7 @@ def main():
                         util.mkdirs(save_path)
                         save_name = f"{save_path}/{idx:03d}_multi_channel.tif"
                         print(output.shape)
-                        if len(os.listdir(save_path)) < 30:    
+                        if len(os.listdir(save_path)) < 10:    
                             with rasterio.open(save_name, 'w', height=output.shape[0], width=output.shape[1], count=output.shape[2], dtype=output.dtype) as dst:
                                 for band in range(output.shape[2]):
                                     dst.write(output[:, :, band], band + 1)
@@ -398,10 +405,11 @@ def main():
                         gt_img = util.tensor2img(visuals["GT"].squeeze(), out_type=np.float32)
 
                         avg_psnr += util.calculate_psnr(output, gt_img)
-
+                
                         save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
                         util.mkdirs(save_path)
-                        save_name = f"{save_path}/{idx:03d}_Grayscale.png"
+                        if len(os.listdir(save_path)) < 30:  
+                            save_name = f"{save_path}/{idx:03d}_Grayscale.png"
 
                         cv2.imwrite(save_name, output)
             
@@ -426,7 +434,8 @@ def main():
                         save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
                         util.mkdirs(save_path)
                         save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
-                        util.save_img(output, save_name)
+                        if len(os.listdir(save_path)) < 15:  
+                            util.save_img(output, save_name)
                         
                     idx += 1
 

@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.path.dirname('/home/yuki/EDiffSR/external/galerkin_transformer')) 
+sys.path.append(os.path.dirname('/home/yuki/research/EDiffSR/external/galerkin_transformer')) 
 try:
     from layers import *
     from utils_ft import *
