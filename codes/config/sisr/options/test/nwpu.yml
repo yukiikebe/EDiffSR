@@ -1,0 +1,61 @@
+# name: Test-AID-iter200000
+name: Test-AID-iter180000
+# name : Test-Sentinel-test-iter180000
+suffix: ~  # add suffix to saved images
+model: denoising
+distortion: sr
+gpu_ids: [0]
+
+sde:
+  max_sigma: 50
+  T: 100
+  schedule: cosine # linear, cosine
+  eps: 0.005
+  
+degradation:
+  # for denoising
+  sigma: 25
+  noise_type: G # Gaussian noise: G
+
+  # for super-resolution
+  scale: 4
+
+#### path
+path:
+  pretrain_model_G: ../../../experiments/sisr/ediffsr/180000_G.pth
+  # pretrain_model_G: ../../../experiments/sisr/ediffsr_retrain/models/200000_G.pth
+  
+datasets:
+  # test1:
+  #   name: NWPU
+  #   mode: LQGT
+  #   dataroot_GT: /mnt/disk3/XY-SPACE/SISR/Dataset/test/NWPU-real/Bicubic
+  #   dataroot_LQ: /mnt/disk3/XY-SPACE/SISR/Dataset/test/NWPU-real/GT
+  ####test2:
+    ####name: DIOR
+    ####mode: LQGT
+####    dataroot_GT: /mnt/disk3/XY-SPACE/SISR/Dataset/test/DIOR1000/GT
+####    dataroot_LQ: /mnt/disk3/XY-SPACE/SISR/Dataset/test/DIOR1000/LR
+
+  # test 1:
+  #   name: Sentinel
+  #   mode: LQGT
+  #   dataroot_GT: /workspace/resize_Sentinel/GT
+  #   dataroot_LQ: /workspace/resize_Sentinel/LR
+
+  test 1:
+    name: AID
+    mode: LQGT
+    dataroot_GT: /workspace/AID_split_matched/HR/test
+    dataroot_LQ: /workspace/AID_split_matched/LR/test
+ 
+#### network structures
+network_G:
+  which_model_G: ConditionalNAFNet
+  setting:
+    width: 64
+    enc_blk_nums: [14, 1, 1, 1]
+    middle_blk_num: 1
+    dec_blk_nums: [1, 1, 1, 1]
+
+

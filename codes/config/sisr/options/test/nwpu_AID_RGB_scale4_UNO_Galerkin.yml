@@ -1,0 +1,90 @@
+################ 
+#fix navior_strokes_uno2d.py fc2 to 3  
+################
+# name: Test-AID-iter200000
+name: Baseline_UNO_Galerkin_AID
+# name : Test-Sentinel-test-iter180000
+suffix: ~  # add suffix to saved images
+model: denoising
+distortion: sr
+gpu_ids: [0]
+
+sde:
+  max_sigma: 50
+  T: 100
+  schedule: cosine # linear, cosine
+  eps: 0.005
+  
+degradation:
+  # for denoising
+  sigma: 25
+  noise_type: G # Gaussian noise: G
+
+  # for super-resolution
+  scale: 4
+
+#### path
+path:
+  pretrain_model_G: ../../../experiments/yuki/ediffsr_train_AID_UNO_Galerkin/models/30000_G.pth
+  strict_load: true
+
+datasets:
+  test 1:
+    name: AID
+    mode: LQGT
+    dataroot_GT: ~/research/EDiffSR/AID_split_matched/HR/test
+    dataroot_LQ: ~/research/EDiffSR/AID_split_matched/LR/test
+    img_channel: 3
+    use_shuffle: true
+    use_flip: true
+    use_rot: true
+    use_noise: False
+    use_bright: False
+    use_blur: False
+    color: RGB
+ 
+#### network structures
+network_G:
+  which_model_G: ConditionalNAFNet
+  setting:
+    width: 64
+    enc_blk_nums: [14, 1, 1, 1]
+    middle_blk_num: 1
+    dec_blk_nums: [1, 1, 1, 1]
+    img_channel: 3
+  uno_in_width: 3
+  uno_width: 64
+  uno_out_width: 3
+  use_uno: True
+
+  galerkin_transformer_setting:
+    node_feats: 6                # Matches input channels
+    # node_feats: 16
+    n_hidden: 64                  # Internal feature dim (can increase for capacity)
+    n_head: 4                     # Number of attention heads
+    num_encoder_layers: 3         # Number of encoder blocks
+    attention_type: galerkin      # Type of attention mechanism
+
+    pos_dim: 2                    # Since you're using (x, y) 2D positional encoding
+    dim_feedforward: 128          # Feedforward layer width (typically 2x n_hidden)
+    layer_norm: true              # Apply layer normalization
+    attn_norm: false              # Don't apply attention-specific normalization
+    norm_type: pre                # Pre-normalization (commonly used with transformers)
+    batch_norm: false             # Skip batch norm (common in transformer-style nets)
+    xavier_init: true             # Use Xavier for weight init
+    diagonal_weight: true         # Recommended for Galerkin
+    symmetric_init: false         # Can be false unless you have symmetric data
+    residual_type: add            # Additive residuals (standard)
+    attn_activation: gelu         # GELU activation
+    dropout: 0.1
+
+    debug: false
+    num_feat_layers: 0
+    return_attn_weight: false
+    decoder_type: none            # Use 'none' if you're extracting features only
+    n_targets: 0                  # 0 means no regression (you’re not predicting output)
+    spacial_dim: 2                # For grid-based inputs
+    spacial_residual: false
+    return_latent: false
+
+

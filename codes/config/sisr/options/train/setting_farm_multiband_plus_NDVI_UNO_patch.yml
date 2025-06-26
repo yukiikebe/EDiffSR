@@ -1,0 +1,160 @@
+#### general settings
+# name: ediffsr_train_farm_multiband_plus_NDVI_Lastlayer_UNO_High_High #(12,12)
+# name: ediffsr_train_farm_multiband_plus_NDVI_UNO_using_conv_instead_linear #it helps to store position information
+name: ediffsr_train_farm_multiband_plus_NDVI_Lastlayer_UNO_Galerkin_patch
+use_tb_logger: true
+model: denoising
+distortion: sr
+gpu_ids: [0]
+
+sde:
+  max_sigma: 50
+  T: 100
+  schedule: cosine # linear, cosine
+  eps: 0.005
+
+degradation: # for some synthetic dataset that only have GTs
+  # for denoising
+  sigma: 25
+  noise_type: G # Gaussian noise: G
+
+  # for super-resolution
+  scale: 16
+  
+#### datasets
+datasets:
+  train:
+    optimizer: AdamW # Adam, AdamW, Lion
+    name: Train_Dataset
+    mode: LQGT
+    # dataroot_GT: /workspace/AID_split_matched/HR/train
+    # dataroot_LQ: /workspace/AID_split_matched/LR/train
+    dataroot_GT: ~/research/EDiffSR/Orthophotos_patches_tiff_scale16_split_ratio/HR/train
+    dataroot_LQ: ~/research/EDiffSR/Orthophotos_patches_tiff_scale16_split_ratio/LR/train
+
+    use_shuffle: true
+    n_workers: 8  # per GPU
+    batch_size: 4
+    GT_size: 256
+    LR_size: 16
+    use_flip: true
+    use_rot: true
+    use_noise: False
+    use_bright: False
+    use_blur: False
+    color: MultibandNDVI
+    img_channel: 8 #add my selelf
+  val:
+    name: Val_Dataset
+    mode: LQGT
+    # dataroot_GT: /workspace/AID_split_matched/HR/val
+    # dataroot_LQ: /workspace/AID_split_matched/LR/val
+    dataroot_GT: ~/research/EDiffSR/Orthophotos_patches_tiff_scale16_split_ratio/HR/val
+    dataroot_LQ: ~/research/EDiffSR/Orthophotos_patches_tiff_scale16_split_ratio/LR/val
+    color: MultibandNDVI
+    img_channel: 8 #add my selelf
+
+
+#### network structures
+network_G:
+  which_model_G: ConditionalNAFNet
+  setting:
+    width: 64
+    enc_blk_nums: [14, 1, 1, 1]
+    middle_blk_num: 1
+    dec_blk_nums: [1, 1, 1, 1]
+    img_channel: 8
+  uno_in_width: 8
+  uno_width: 64
+  uno_out_width: 3
+  use_uno: True
+
+  galerkin_transformer_setting:
+    node_feats: 8                # Matches input channels
+    # node_feats: 16
+    n_hidden: 64                  # Internal feature dim (can increase for capacity)
+    n_head: 4                     # Number of attention heads
+    num_encoder_layers: 3         # Number of encoder blocks
+    attention_type: galerkin      # Type of attention mechanism
+
+    pos_dim: 2                    # Since you're using (x, y) 2D positional encoding
+    dim_feedforward: 128          # Feedforward layer width (typically 2x n_hidden)
+    layer_norm: true              # Apply layer normalization
+    attn_norm: false              # Don't apply attention-specific normalization
+    norm_type: pre                # Pre-normalization (commonly used with transformers)
+    batch_norm: false             # Skip batch norm (common in transformer-style nets)
+    xavier_init: true             # Use Xavier for weight init
+    diagonal_weight: true         # Recommended for Galerkin
+    symmetric_init: false         # Can be false unless you have symmetric data
+    residual_type: add            # Additive residuals (standard)
+    attn_activation: gelu         # GELU activation
+    dropout: 0.1
+
+    debug: false
+    num_feat_layers: 0
+    return_attn_weight: false
+    decoder_type: none            # Use 'none' if you're extracting features only
+    n_targets: 0                  # 0 means no regression (you’re not predicting output)
+    spacial_dim: 2                # For grid-based inputs
+    spacial_residual: false
+    return_latent: false
+
+#### path
+path:
+  pretrain_model_G: ~
+  strict_load: true
+  # strict_load: false
+  # resume_state: ~/EDiffSR/experiments/yuki/ediffsr_train_farm_multiband_plus_NDVI_Lastlayer_UNO_High_High/training_state/20000.state
+  # resume_state: /home/yuki/EDiffSR/experiments/yuki/ediffsr_train_farm_multiband_plus_NDVI_Lastlayer_UNO_Galerkin/training_state/60000.state
+  resume_state: ~
+
+#### training settings: learning rate scheme, loss
+train:
+  optimizer: AdamW # Adam, AdamW, Lion
+  lr_G: !!float 4e-5
+  lr_scheme: TrueCosineAnnealingLR
+  beta1: 0.9
+  beta2: 0.99
+  niter: 105000
+  # niter: 70000  # 60000
+  # niter: 4
+  warmup_iter: -1  # no warm up
+  lr_steps: [2000, 3000, 4000]
+  lr_gamma: 0.5
+  eta_min: !!float 1e-7
+
+  uno_optimizer: AdamW
+  lr_uno: !!float 1e-4
+  uno_weight_decay: !!float 1e-3
+  uno_lr_steps: [2000, 3000, 4000]
+  uno_lr_gamma: 0.5
+  uno_beta1: 0.9
+  uno_beta2: 0.99
+  uno_eta_min: !!float 1e-7
+  uno_inwidth: 8
+  uno_width: 32
+  uno_factor: 0.75
+  # UNO + uno_factor: 0.5
+
+  galerkin_optimizer: AdamW
+  lr_galerkin: !!float 1e-4
+  galerkin_weight_decay: !!float 1e-3
+  galerkin_lr_steps: [4000, 5000, 6000]
+  galerkin_lr_gamma: 0.5
+  galerkin_beta1: 0.9
+  galerkin_beta2: 0.99
+  uno_eta_min: !!float 1e-7
+
+  # criterion
+  is_weighted: False
+  loss_type: l1
+  weight: 1.0
+  edge_weight: 0.3
+
+  manual_seed: 0
+  val_freq: !!float 5e3 # 5e3
+
+#### logger
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 5e3
