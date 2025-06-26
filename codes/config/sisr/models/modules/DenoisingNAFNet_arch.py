@@ -14,7 +14,6 @@ sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
 from navier_stokes_uno2d import UNO, UNO_S256
 
 sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
-from model import SimpleTransformerEncorderOnly
 
 class SimpleGate(nn.Module):
     def forward(self, x):
@@ -206,10 +205,10 @@ class ConditionalNAFNet(nn.Module):
         chan = width
         
         self.FuseBlocks = nn.ModuleList([
-            FuseBlock(spacial_channels=chan, freuency_channels=96, num_heads=8, fourier_dim=(-2, -1)),
-            FuseBlock(spacial_channels=chan * 2, freuency_channels=192, num_heads=8, fourier_dim=(-2, -1)),
-            FuseBlock(spacial_channels=chan * 4, freuency_channels=384, num_heads=8, fourier_dim=(-2, -1)),
-            FuseBlock(spacial_channels=chan * 8, freuency_channels=768, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan, freuency_channels=72, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 2, freuency_channels=144, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 4, freuency_channels=288, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 8, freuency_channels=576, num_heads=8, fourier_dim=(-2, -1)),
         ])
         
         for num in enc_blk_nums:
@@ -268,18 +267,25 @@ class ConditionalNAFNet(nn.Module):
         
         if self.uno is not None:
             cond_input = cond.permute(0, 2, 3, 1)
-            print("cond_input shape:", cond_input.shape)
-            f0, f1, f2, f3 = self.uno(cond_input)
-            features = [f0, f1, f2, f3]
+            uno_features = self.uno(cond_input)
 
         for idx, (encoder, down) in enumerate(zip(self.encoders, self.downs)):
             x, _ = encoder([x, t])
             if self.uno is not None:
-                uno_feat = features[idx]
-                x = self.FuseBlocks[idx](x, uno_feat)
+                uno_feature = uno_features[idx]
+                x = self.FuseBlocks[idx](x, uno_feature)
+                
+                # Save the feature map as an RGB image for visualization
+                # Take the first 3 channels, normalize to [0,1], and save
+                # save_dir = "/home/yuki/research/EDiffSR/debug"
+                # feature_to_save = x[0, :3, :, :]
+                # feature_min = feature_to_save.min()
+                # feature_max = feature_to_save.max()
+                # feature_norm = (feature_to_save - feature_min) / (feature_max - feature_min + 1e-8)
+                # save_image(feature_norm, os.path.join(save_dir, f"feature_{idx}.png"), nrow=8, normalize=True)
             encs.append(x)
             x = down(x)
-            print("x shape", x.shape)
+            # print("x shape", x.shape)
 
         x, _ = self.middle_blks([x, t])
 
@@ -288,7 +294,7 @@ class ConditionalNAFNet(nn.Module):
             x = x + enc_skip
             x, _ = decoder([x, t])
 
-        print("x shape before ending", x.shape)
+        # print("x shape before ending", x.shape)
         x = self.ending(x)
         
         return x
@@ -299,28 +305,6 @@ class ConditionalNAFNet(nn.Module):
         mod_pad_w = (self.padder_size - w % self.padder_size) % self.padder_size
         x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h))
         return x
-    
-    def cross_attention(self, ediffsr_feature, uno_feature):
-        """
-        Cross attention mechanism to fuse features from EDiffSR and UNO.
-        Args:
-            ediffsr_features: Features from EDiffSR.
-            uno_features: Features from UNO.
-        Returns:
-            Fused features.
-        """
-        # Assuming ediffsr_features and uno_features are of shape (B, C, H, W)    
-        B_spatial, C_spatial, H_spatial, W_spatial = ediffsr_feature.shape
-        B_frequency, C__frequency, H__frequency, W__frequency = uno_feature.shape
-
-        if (H_spatial != H__frequency) or (W_spatial != W__frequency):
-            uno_feature = F.interpolate(
-                uno_feature, size=(H_spatial, W_spatial), mode='bilinear', align_corners=False
-            )
-        
-        
-        
-
         
 def add_coord_channels(x):
     """

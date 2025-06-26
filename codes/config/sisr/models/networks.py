@@ -12,7 +12,6 @@ sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
 from navier_stokes_uno2d import UNO, UNO_HiLoc
 
 sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
-from model import SimpleTransformerEncorderOnly
 
 # Generator
 def define_G(opt):
@@ -23,16 +22,11 @@ def define_G(opt):
         uno = None
         if opt_net["use_uno"]:
             if opt_net["use_uno_hiloc"]:
-                all_transformer_config = opt_net.get("galerkin_transformer_setting", {})
-                galerkin_encoders = nn.ModuleList()
-                for size in [192, 384, 768, 1536]:
-                    encoder_cfg = all_transformer_config.get(f"encoder_{size}", {})
-                    galerkin_encoders.append(SimpleTransformerEncorderOnly(**encoder_cfg))
-                galerkin_encoders = galerkin_encoders.to(torch.device("cuda" if opt["gpu_ids"] else "cpu"))
+                galerkin_config = opt_net.get("galerkin_transformer_setting", {})
                 uno = UNO_HiLoc(
                     in_width=opt_net["uno_in_width"],
                     width=opt_net["uno_width"],
-                    galerkin_encorders = galerkin_encoders
+                    galerkin_config = galerkin_config
                 )
             else:
                 uno = UNO(

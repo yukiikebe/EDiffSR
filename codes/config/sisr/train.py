@@ -74,9 +74,9 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        # wandb_run = wandb.init(project='super resolution ediffsr', name='Baseline_UNO_Galerkin_fix_patch_ver')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_High_High', resume='must', id='tdy6onuc')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO_Galerkin_AID_vr3')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO_Galerkin_AID_vr3')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
         wandb.config.update(opt, allow_val_change=True)
 

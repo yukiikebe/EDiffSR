@@ -951,6 +951,7 @@ class SimpleTransformerEncorderOnly(nn.Module):
         self._get_setting()
         self._initialize()
         self.__name__ = self.attention_type.capitalize() + 'Transformer'
+        self.feat_extract_type = None
 
     def forward(self, node, edge, pos, grid=None, weight=None):
         '''

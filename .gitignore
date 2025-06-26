@@ -78,3 +78,4 @@ external/galerkin_transformer/eval
 codes/config/sisr/models/modules/__pycache__/fuse_block.cpython-39.pyc
 codes/config/sisr/sde_state/
 codes/config/sisr/test_without_psnr.py
+debug

@@ -180,33 +180,6 @@ class SpectralConv2d_Uno(nn.Module):
                 )
             )
         )
-        self.weights_high = nn.Parameter(
-            self.scale
-            * (
-                torch.randn(
-                    in_codim, out_codim, self.modes1, self.modes2, dtype=torch.cfloat
-                )
-            )
-        )
-        
-        self.weights3 = nn.Parameter(
-            self.scale
-            * (
-                torch.randn(
-                    in_codim, out_codim, self.modes1, self.modes2, dtype=torch.cfloat
-                )
-            )
-        )
-        self.weights4 = nn.Parameter(
-            self.scale
-            * (
-                torch.randn(
-                    in_codim, out_codim, self.modes1, self.modes2, dtype=torch.cfloat
-                )
-            )
-        )
-        # print("init_weights1.shape", self.weights1.shape)
-        # print("init_weights2.shape", self.weights2.shape)
 
     # Complex multiplication
     def compl_mul2d(self, input, weights):

@@ -15,7 +15,8 @@ from timeit import default_timer
 from utilities3 import *
 from Adam import Adam
 import sys
-
+sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
+from model import SimpleTransformerEncorderOnly
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -205,7 +206,7 @@ class UNO(nn.Module):
         x_fc0 = self.fc0(x_fc)
         x_fc0 = F.gelu(x_fc0)
 
-        x_fc0 = x_fc0.permute(0, 3, 1, 2)
+        x_fc0 = x_fc0.permute(0, 3, 1, 2).contiguous()
 
         x_fc0 = F.pad(x_fc0, [self.padding, self.padding, self.padding, self.padding])
 
@@ -232,8 +233,8 @@ class UNO(nn.Module):
         # x_fc1 = F.gelu(x_fc1)
 
         # x_out = self.fc2(x_fc1)
-
-        return x_c0, x_c1, x_c2, x_c3
+        result_faetures = [x_c0, x_c1, x_c2, x_c3]
+        return result_faetures
 
     def get_grid(self, shape, device):
         batchsize, size_x, size_y = shape[0], shape[1], shape[2]
@@ -252,14 +253,24 @@ class UNO(nn.Module):
 # it has less aggressive scaling factors for domains and co-domains.
 # ####
 class UNO_HiLoc(nn.Module):
-    def __init__(self, in_width, width, pad=0, factor=3 / 4, galerkin_encorders=None):
-        super(UNO, self).__init__()
+    def __init__(self, in_width, width, pad=0, factor=3 / 4, galerkin_config=None, encoder_layers=4):
+        super(UNO_HiLoc, self).__init__()
 
         self.in_width = in_width  # input channel
         self.width = width
         self.factor = factor
         self.padding = pad
-        self.galerkin_encorders = galerkin_encorders
+        self.encoder_layers = encoder_layers
+        
+        galerkin_encoders = nn.ModuleList()
+        shared_cfg = {k: v for k, v in galerkin_config.items() if k not in ["encoders", "layer_name"]}
+
+        for layer_name in galerkin_config["layer_name"]:
+            encoder_cfg = galerkin_config["encoders"][layer_name]
+            full_cfg = {**shared_cfg, **encoder_cfg}
+            galerkin_encoders.append(SimpleTransformerEncorderOnly(**full_cfg))
+        
+        self.galerkin_encoders = galerkin_encoders.to("cuda")
         
         print("in_width", in_width)
         print("width", width)
@@ -298,10 +309,10 @@ class UNO_HiLoc(nn.Module):
 
     def forward(self, x_whole):
         #make patches
-        x_whole_tmp = x_whole.permute(0, 3, 1, 2)  # (B, H, W, C) -> (B, C, H, W)
+        x_whole_tmp = x_whole.permute(0, 3, 1, 2).contiguous()  # (B, H, W, C) -> (B, C, H, W)
         x_patches = self.make_patches(x_whole_tmp)  # (B, C, H, W) -> (B, H, W, C)
         for i in range(len(x_patches)):
-            x_patches[i] = x_patches[i].permute(0, 2, 3, 1)
+            x_patches[i] = x_patches[i].permute(0, 2, 3, 1).contiguous()
             
         #layer 0 whole and patches
         # whole image process
@@ -313,7 +324,7 @@ class UNO_HiLoc(nn.Module):
         
         #patch process
         x_fc0_patches = []
-        x_c_patches = [[] for _ in range(9)]  # 9 layers if needed
+        result_faetures = []
 
         for i in range(len(x_patches)):
             grid_patch = self.get_grid(x_patches[i].shape, x_patches[i].device)
@@ -324,37 +335,21 @@ class UNO_HiLoc(nn.Module):
         D1_patch, D2_patch = x_fc0_patches[0].shape[-2], x_fc0_patches[0].shape[-1]
 
         dim1, dim2 = int(D1_patch * self.factor), int(D2_patch * self.factor)
-        x_c_patches[0] = self.process_integral_operator_patches(self.L0_patches, x_fc0_patches, dim1, dim2)
-        assert len(x_c_patches[0]) == 16, f"Expected 16 patches after L0, got {len(x_c_patches[0])}"
+        x_c0_patche = self.process_integral_operator_patches(self.L0_patches, x_fc0_patches, dim1, dim2)
+        assert len(x_c0_patche) == 16, f"Expected 16 patches after L0, got {len(x_c0_patche)}"
 
-        x_c0 = self.combine_whole_and_patches(x_c0_whole, x_c_patches[0])
-        x_c0 = self.galerkin_process(self.galerkin_encorders[0], x_c0)
+        x_c0 = self.combine_whole_and_patches(x_c0_whole, x_c0_patche)
+        x_c0 = self.galerkin_process(self.galerkin_encoders[0], x_c0)
+        result_faetures.append(x_c0)
         
-        #layer 1
-        x_c0_patches = self.make_patches(x_c0)
-        x_c1_whole = self.L1_whole(x_c0, D1_whole // 2, D2_whole // 2)
-        dim1, dim2 = int(D1_patch // 2), int(D2_patch // 2)
-        x_c_patches[1] = self.process_integral_operator_patches(self.L1_patches, x_c0_patches, dim1, dim2)
-        x_c1 = self.combine_whole_and_patches(x_c1_whole, x_c_patches[1])
-        x_c1 = self.galerkin_process(self.galerkin_encorders[1], x_c1)
-        
-        #layer 2
-        x_c1_patches = self.make_patches(x_c1)
-        x_c2_whole = self.L2_whole(x_c1, D1_whole // 4, D2_whole // 4)
-        dim1, dim2 = int(D1_patch // 4), int(D2_patch // 4)
-        x_c_patches[2] = self.process_integral_operator_patches(self.L2_patches, x_c1_patches, dim1, dim2)
-        x_c2 = self.combine_whole_and_patches(x_c2_whole, x_c_patches[2])
-        x_c2 = self.galerkin_process(self.galerkin_encorders[2], x_c2)
-    
-        #layer 3
-        x_c2_patches = self.make_patches(x_c2)
-        x_c3_whole = self.L3_whole(x_c2, D1_whole // 8, D2_whole // 8)
-        dim1, dim2 = int(D1_patch // 8), int(D2_patch // 8)
-        x_c_patches[3] = self.process_integral_operator_patches(self.L3_patches, x_c2_patches, dim1, dim2)
-        x_c3 = self.combine_whole_and_patches(x_c3_whole, x_c_patches[3])
-        x_c3 = self.galerkin_process(self.galerkin_encorders[3], x_c3)
-        
-        return x_c0, x_c1, x_c2, x_c3
+        # each layer process
+        for i in range(self.encoder_layers - 1):
+            x_c = self.process_layer(
+                i + 1, result_faetures[-1], D1_whole, D2_whole, D1_patch, D2_patch
+            )
+            result_faetures.append(x_c)
+            
+        return result_faetures
     
         # x_c4 = self.L4(x_c3, D1 // 2, D2 // 2)
         # x_c4 = torch.cat([x_c4, x_c1], dim=1)
@@ -385,7 +380,7 @@ class UNO_HiLoc(nn.Module):
         
         x_fc0 = self.fc0(x_fc)
         x_fc0 = F.gelu(x_fc0)
-        x_fc0 = x_fc0.permute(0, 3, 1, 2) # (B, H, W, C) -> (B, C, H, W)
+        x_fc0 = x_fc0.permute(0, 3, 1, 2).contiguous() # (B, H, W, C) -> (B, C, H, W)
         
         x_fc0 = F.pad(x_fc0, [self.padding] * 4)  
         D1, D2 = x_fc0.shape[-2], x_fc0.shape[-1]
@@ -397,7 +392,7 @@ class UNO_HiLoc(nn.Module):
         
         assert x_c_whole.shape == x_c_patches_all.shape, f"Expected shapes to match, got {x_c_whole.shape} and {x_c_patches_all.shape}"
         x_c = torch.cat([x_c_whole, x_c_patches_all], dim=1)
-        print("x_c_combine", x_c.shape)
+        # print("x_c_combine", x_c.shape)
         return x_c    
     
     def galerkin_process(self, galerkin_encoder, x_c):
@@ -407,9 +402,12 @@ class UNO_HiLoc(nn.Module):
         pos = self.get_2d_pos_encoding(B, H, W, x_c.device)
         
         galerkin_encorder_out = galerkin_encoder(node=garlerkin_encorder_input,edge=None, pos=pos)  
+        # if first_layer:
+        #     C = 64
+        # else:
         C = int(C / 2)
-        x_c = galerkin_encorder_out.permute(0, 2, 1).reshape(B, C, H, W)  # (B, C, H, W)
-        print("x_c_galerkin", x_c.shape)
+        x_c = galerkin_encorder_out.permute(0, 2, 1).reshape(B, C, H, W).contiguous()  # (B, C, H, W)
+        # print("x_c_galerkin", x_c.shape)
         assert x_c.shape == (B, C, H, W), f"Expected shape {(B, C, H, W)}, got {x_c.shape}"
         return x_c  
     
@@ -424,13 +422,13 @@ class UNO_HiLoc(nn.Module):
             x_c_patches.append(patch_out)
         return x_c_patches
 
-    def make_patches(self, x_c):
+    def make_patches(self, x_c, num_split=4):
         B, C, H, W = x_c.shape
         x_c_patches = []
-        x_c_height = x_c.chunk(4, dim=2)
+        x_c_height = x_c.chunk(num_split, dim=2)
         for row in x_c_height:
-            x_c_patches.extend(row.chunk(4, dim=3))
-            assert x_c_patches[-1].shape == (B, C, H // 4, W // 4), f"Expected shape {(B, C, H // 4, W // 4)}, got {x_c_patches[-1].shape}"
+            x_c_patches.extend(row.chunk(num_split, dim=3))
+            assert x_c_patches[-1].shape == (B, C, H // num_split, W // num_split), f"Expected shape {(B, C, H // num_split, W // num_split)}, got {x_c_patches[-1].shape}"
         return x_c_patches
     
     def get_grid(self, shape, device):
@@ -452,6 +450,24 @@ class UNO_HiLoc(nn.Module):
         grid = grid.reshape(-1, 2)  # [H*W, 2]
         grid = grid.unsqueeze(0).repeat(B, 1, 1)  # [B, H*W, 2]
         return grid 
+    
+    def process_layer(self, index, x_c_prev, D1_whole, D2_whole, D1_patch, D2_patch):
+        x_c_patches = self.make_patches(x_c_prev)
+        
+        L_whole = getattr(self, f"L{index}_whole")
+        x_c_whole = L_whole(x_c_prev, D1_whole // (2**index), D2_whole // (2**index))
+
+        dim1 = int(D1_patch // (2**index))
+        dim2 = int(D2_patch // (2**index))
+
+        L_patches = getattr(self, f"L{index}_patches")
+        x_c_patch = self.process_integral_operator_patches(L_patches, x_c_patches, dim1, dim2)
+
+        x_c = self.combine_whole_and_patches(x_c_whole, x_c_patch)
+        x_c = self.galerkin_process(self.galerkin_encoders[index], x_c)
+
+        return x_c
+
 
 
 ###

@@ -9,7 +9,6 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
-        # Changed from Conv3d to Conv2d
         self.kv = nn.Conv2d(dim, dim * 2, kernel_size=1, bias=bias)
         self.kv_dwconv = nn.Conv2d(dim * 2, dim * 2, kernel_size=3, stride=1, padding=1, groups=dim * 2, bias=bias)
         self.q = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
@@ -17,7 +16,6 @@ class Attention(nn.Module):
         self.project_out = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
 
     def forward(self, x, y):
-        # Changed from 5D to 4D unpacking
         b, c, h, w = x.shape
 
         if y.shape[2:] != (h, w):
@@ -55,7 +53,7 @@ class FuseBlock(nn.Module):
         self.frequency_channels = freuency_channels
         self.num_heads = num_heads
         self.fourier_dim = fourier_dim
-        
+        print("spatial_channels:", self.spatial_channels, "frequency_channels:", self.frequency_channels, "num_heads:", self.num_heads, "fourier_dim:", self.fourier_dim)
         # Convolutional preprocessing for spatial_fature and frequemcy_feature
         self.frequency_conv = nn.Conv2d(self.frequency_channels, self.spatial_channels, kernel_size=3, stride=1, padding=1)
         self.spatial_conv = nn.Conv2d(self.spatial_channels, self.spatial_channels, kernel_size=3, stride=1, padding=1)
@@ -76,10 +74,10 @@ class FuseBlock(nn.Module):
         frequency_fft = torch.fft.fftn(frequemcy_feature, dim=self.fourier_dim)
         
         # Extract real and imaginary parts
-        real_spatial = spatial_fft.real
-        imag_spatial = spatial_fft.imag
-        real_frequency = frequency_fft.real
-        imag_frequency = frequency_fft.imag
+        real_spatial = spatial_fft.real.contiguous()
+        imag_spatial = spatial_fft.imag.contiguous()
+        real_frequency = frequency_fft.real.contiguous()
+        imag_frequency = frequency_fft.imag.contiguous()
         
         # Update real_spatial with attention
         new_real_spatial = real_spatial + self.real_spatial_att(real_spatial, real_frequency)
