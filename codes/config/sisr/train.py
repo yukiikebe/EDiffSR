@@ -74,7 +74,7 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_Baseline', resume='must', id='2trtlbms')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_High_High', resume='must', id='tdy6onuc')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO_Galerkin_AID_vr3')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
@@ -431,11 +431,12 @@ def main():
                         gt_img = util.tensor2img(visuals["GT"].squeeze(), out_type=np.uint8)  # uint8
 
                         # save the validation results
-                        save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
-                        util.mkdirs(save_path)
-                        save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
-                        if len(os.listdir(save_path)) < 15:  
-                            util.save_img(output, save_name)
+                        if len(os.listdir(save_path)) < 15: 
+                            save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
+                            util.mkdirs(save_path)
+                            save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
+                            if len(os.listdir(save_path)) < 15:  
+                                util.save_img(output, save_name)
                         
                     idx += 1
 

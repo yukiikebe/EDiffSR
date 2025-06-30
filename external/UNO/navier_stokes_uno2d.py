@@ -17,6 +17,8 @@ from Adam import Adam
 import sys
 sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
 from model import SimpleTransformerEncorderOnly
+import os
+from torchvision import utils as vutils
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -253,7 +255,7 @@ class UNO(nn.Module):
 # it has less aggressive scaling factors for domains and co-domains.
 # ####
 class UNO_HiLoc(nn.Module):
-    def __init__(self, in_width, width, pad=0, factor=3 / 4, galerkin_config=None, encoder_layers=4):
+    def __init__(self, in_width, width, pad=0, factor=3 / 4, galerkin_config=None, encoder_layers=4, debug=False):
         super(UNO_HiLoc, self).__init__()
 
         self.in_width = in_width  # input channel
@@ -261,6 +263,8 @@ class UNO_HiLoc(nn.Module):
         self.factor = factor
         self.padding = pad
         self.encoder_layers = encoder_layers
+        self.debug = debug
+        self.num_iter = 0
         
         galerkin_encoders = nn.ModuleList()
         shared_cfg = {k: v for k, v in galerkin_config.items() if k not in ["encoders", "layer_name"]}
@@ -335,10 +339,14 @@ class UNO_HiLoc(nn.Module):
         D1_patch, D2_patch = x_fc0_patches[0].shape[-2], x_fc0_patches[0].shape[-1]
 
         dim1, dim2 = int(D1_patch * self.factor), int(D2_patch * self.factor)
-        x_c0_patche = self.process_integral_operator_patches(self.L0_patches, x_fc0_patches, dim1, dim2)
-        assert len(x_c0_patche) == 16, f"Expected 16 patches after L0, got {len(x_c0_patche)}"
+        x_c0_patch = self.process_integral_operator_patches(self.L0_patches, x_fc0_patches, dim1, dim2)
+        assert len(x_c0_patch) == 16, f"Expected 16 patches after L0, got {len(x_c0_patch)}"
 
-        x_c0 = self.combine_whole_and_patches(x_c0_whole, x_c0_patche)
+        #save features
+        if self.debug and self.num_iter % 10000 == 0:
+            self.save_features(x_whole_tmp, x_c0_whole, x_c0_patch, self.num_iter)
+            
+        x_c0 = self.combine_whole_and_patches(x_c0_whole, x_c0_patch)
         x_c0 = self.galerkin_process(self.galerkin_encoders[0], x_c0)
         result_faetures.append(x_c0)
         
@@ -348,7 +356,8 @@ class UNO_HiLoc(nn.Module):
                 i + 1, result_faetures[-1], D1_whole, D2_whole, D1_patch, D2_patch
             )
             result_faetures.append(x_c)
-            
+        
+        self.num_iter += 1
         return result_faetures
     
         # x_c4 = self.L4(x_c3, D1 // 2, D2 // 2)
@@ -431,6 +440,21 @@ class UNO_HiLoc(nn.Module):
             assert x_c_patches[-1].shape == (B, C, H // num_split, W // num_split), f"Expected shape {(B, C, H // num_split, W // num_split)}, got {x_c_patches[-1].shape}"
         return x_c_patches
     
+    def reconstruct_from_patches(self, patches, num_split=4):
+        print(type(patches))
+        print(len(patches))
+        assert len(patches) == num_split * num_split, f"Expected {num_split * num_split} patches, got {len(patches)}"
+        
+        
+        B, C, H, W = patches[0].shape
+        rows = []
+        for i in range(num_split):
+            row = torch.cat(patches[i * num_split : (i + 1) * num_split], dim=3)  # concat in width
+            rows.append(row)
+        full = torch.cat(rows, dim=2)  # concat in height
+        assert full.shape == (B, C, H*num_split, W*num_split), f"Expected shape {(B, C, H*num_split, W*num_split)}, got {full.shape}"
+        return full 
+    
     def get_grid(self, shape, device):
         batchsize, size_x, size_y = shape[0], shape[1], shape[2]
         gridx = torch.tensor(np.linspace(0, 2 * np.pi, size_x), dtype=torch.float)
@@ -467,6 +491,30 @@ class UNO_HiLoc(nn.Module):
         x_c = self.galerkin_process(self.galerkin_encoders[index], x_c)
 
         return x_c
+    
+    def save_features(self, original_image, x_whole, x_patch, index):
+        save_dir = f"/home/yuki/research/EDiffSR/debug/{index}"
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        recon_patches = self.reconstruct_from_patches(x_patch)
+            
+        assert x_whole.shape == recon_patches.shape, f"Expected shapes to match, got {x_whole.shape} and {recon_patches.shape}"
+        x_whole= x_whole[0].unsqueeze(1)
+        recon_patches = recon_patches[0].unsqueeze(1)
+        print(f"x_whole shape: {x_whole.shape}, recon_patches shape: {recon_patches.shape}")
+        
+        print(f"original_image shape: {original_image.shape}")
+        
+        vutils.save_image(original_image, f"{save_dir}/original_{index}.png")
+        
+        grid = vutils.make_grid(x_whole, nrow=8, padding=2, normalize=True)
+        vutils.save_image(grid, f"{save_dir}/x_whole_{index}.png")
+        
+                    
+        grid = vutils.make_grid(recon_patches, nrow=8, padding=2, normalize=True)
+        vutils.save_image(grid, f"{save_dir}/x_patch_{index}.png")
+        
+        print(f"Saved features at index {index} to {save_dir}")
 
 
 

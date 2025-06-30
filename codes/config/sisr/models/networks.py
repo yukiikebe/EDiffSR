@@ -26,7 +26,8 @@ def define_G(opt):
                 uno = UNO_HiLoc(
                     in_width=opt_net["uno_in_width"],
                     width=opt_net["uno_width"],
-                    galerkin_config = galerkin_config
+                    galerkin_config = galerkin_config,
+                    debug = True
                 )
             else:
                 uno = UNO(

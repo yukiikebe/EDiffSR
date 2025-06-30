@@ -174,12 +174,6 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
         if C == 3:
             img_np = img_np.transpose(1, 2, 0)  # Convert to HWC
             img_np = img_np[:, :, [2, 1, 0]]  # Convert RGB to BGR
-            
-            # Extract channel 0
-            channel_0_img = img_np[:, :, 0]
-            # # Save channel 0 image
-            channel_0_img_path = "RGB_channel_0_image.png"
-            cv2.imwrite(channel_0_img_path, channel_0_img)
 
         elif C > 3:
             img_np = img_np.transpose(1, 2, 0)  # Convert to HWC
