@@ -58,6 +58,7 @@ def main():
     )
     parser.add_argument("--wandb", action="store_true", default=False)
     parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--total_loss", action="store_true", default=False)
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
 
@@ -74,10 +75,10 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_Baseline', resume='must', id='2trtlbms')
-        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_only_lastlayer_UNO_High_High', resume='must', id='tdy6onuc')
-        # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO_Galerkin_AID_vr3')
-        # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_MultibandNDVI_plus_ndvi_UNO_recalculate_reduce_network', resume='must', id='js2egi47')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO', resume='must', id='tomtw0ij')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_input_fusion')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_encoder_decoder_fusion')
+        # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_CPEM_combine_loss')
         wandb.config.update(opt, allow_val_change=True)
 
     #### distributed training settings
@@ -292,10 +293,11 @@ def main():
             timesteps, states = sde.generate_random_states(x0=GT, mu=LQ)  # t=batchsize，states [b 3 128 128]
             model.feed_data(states, LQ, GT)  # xt, mu, x0, 将加了噪声的LR图xt，LR以及GT输入改进的UNet进行去噪
 
-            model.optimize_parameters(current_step, timesteps, sde)  # 优化UNet
+            model.optimize_parameters(current_step, timesteps, sde, use_total_loss=args.total_loss)  # 优化UNet
             model.update_learning_rate(
                 current_step, warmup_iter=opt["train"]["warmup_iter"]
             )
+            
             if current_step % opt["logger"]["print_freq"] == 0:
                 logs = model.get_current_log()
                 message = "<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> ".format(
@@ -410,8 +412,7 @@ def main():
                         util.mkdirs(save_path)
                         if len(os.listdir(save_path)) < 30:  
                             save_name = f"{save_path}/{idx:03d}_Grayscale.png"
-
-                        cv2.imwrite(save_name, output)
+                            cv2.imwrite(save_name, output)
             
                     else:      
                         output = util.tensor2img(visuals["Output"].squeeze(), out_type=np.float32)  # float32
@@ -430,13 +431,12 @@ def main():
                         output = util.tensor2img(visuals["Output"].squeeze(), out_type=np.uint8)  # uint8
                         gt_img = util.tensor2img(visuals["GT"].squeeze(), out_type=np.uint8)  # uint8
 
+                        save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
+                        util.mkdirs(save_path)
                         # save the validation results
                         if len(os.listdir(save_path)) < 15: 
-                            save_path = str(opt["path"]["experiments_root"]) + '/val_images/' + str(current_step)
-                            util.mkdirs(save_path)
-                            save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'
-                            if len(os.listdir(save_path)) < 15:  
-                                util.save_img(output, save_name)
+                            save_name = save_path + '/'+'{0:03d}'.format(idx) + '.png'    
+                            util.save_img(output, save_name)
                         
                     idx += 1
 

@@ -306,13 +306,13 @@ class UNO_HiLoc(nn.Module):
 
         self.L0_whole = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 22, 22)
         self.L0_patches = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 22, 22, Apply_linear_transform=False)
-        # 
+        
         self.L1_whole, self.L1_patches = make_Layer(self.width, self.factor, 2, 4, 32, 32, 14, 14)
         self.L2_whole, self.L2_patches = make_Layer(self.width, self.factor, 4, 8, 16, 16, 6, 6)
         self.L3_whole, self.L3_patches = make_Layer(self.width, self.factor, 8, 16, 8, 8, 4, 4)
         self.L4_whole, self.L4_patches = make_Layer(self.width, self.factor, 16, 32, 4, 4, 2, 2)
-
-        # self.L4_whole, self.L4_patches = make_Layer(self.width, self.factor, 16, 16, 8, 8, 4, 4)
+        # self.L5_whole, self.L5_patches = make_Layer(self.width, self.factor, 32, 64, 2, 2, 1, 1)
+        
         # self.L5_whole, self.L5_patches = make_Layer(self.width, self.factor, 16, 8, 16, 16, 6, 6)
         # self.L6_whole, self.L6_patches = make_Layer(self.width, self.factor, 8, 4, 32, 32, 6, 6)
         # self.L7_whole, self.L7_patches = make_Layer(self.width, self.factor, 4, 2, 48, 48, 14, 14)
@@ -534,8 +534,11 @@ class UNO_HiLoc(nn.Module):
     
     def process_layer(self, index, x_c_prev, D1_whole, D2_whole, D1_patch, D2_patch):
         x_c_patches = self.make_patches(x_c_prev)
+        dim1, dim2 = None, None
+        x_c_whole = None
         
         L_whole = getattr(self, f"L{index}_whole")
+        
         x_c_whole = L_whole(x_c_prev, D1_whole // (2**index), D2_whole // (2**index))
 
         dim1 = int(D1_patch // (2**index))

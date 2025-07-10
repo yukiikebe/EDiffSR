@@ -193,6 +193,7 @@ class IRSDE(SDE):
         return -noise / self.sigma_bar(t)
 
     def score_fn(self, x, t, **kwargs):
+        freq_features = kwargs.get("freq_features", None)
         # need to pre-set mu and score_model
         noise = self.model(x, self.mu, t, **kwargs)
         return self.get_score_from_noise(noise, t)
@@ -264,8 +265,11 @@ class IRSDE(SDE):
     def reverse_sde(self, xt, T=-1, save_states=False, save_dir='sde_state', **kwargs):
         T = self.T if T < 0 else T
         x = xt.clone()
+
+        freq_features = kwargs.get("freq_features", None)
+
         for t in tqdm(reversed(range(1, T + 1))):
-            score = self.score_fn(x, t, **kwargs)
+            score = self.score_fn(x, t, freq_features=freq_features)
             x = self.reverse_sde_step(x, score, t)
 
             if save_states: # only consider to save 100 images

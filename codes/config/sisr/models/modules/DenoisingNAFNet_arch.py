@@ -8,12 +8,13 @@ import os
 from .module_util import SinusoidalPosEmb, LayerNorm, exists
 from torchvision.utils import save_image
 from .fuse_block import FuseBlock
+from .AdaLN import FuseFreqSpatialAdaLN
 
-import sys
-sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
-from navier_stokes_uno2d import UNO, UNO_S256
+# import sys
+# sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
+# from navier_stokes_uno2d import UNO, UNO_S256
 
-sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
+# sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
 
 class SimpleGate(nn.Module):
     def forward(self, x):
@@ -173,13 +174,15 @@ class ResidualGroup(nn.Module):
 
 class ConditionalNAFNet(nn.Module):
 
-    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upscale=1, uno=None):
+    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upscale=1, uno=None, enc_plus_dec_uno=False, input_fuse=False):
         super().__init__()
         self.upscale = upscale
         fourier_dim = width
         sinu_pos_emb = SinusoidalPosEmb(fourier_dim)
         time_dim = width * 4
         self.uno = uno
+        self.enc_plus_dec_uno = enc_plus_dec_uno
+        self.input_fuse = input_fuse
 
         self.time_mlp = nn.Sequential(
             sinu_pos_emb,
@@ -190,6 +193,7 @@ class ConditionalNAFNet(nn.Module):
 
         self.intro = nn.Conv2d(in_channels=img_channel*2, out_channels=width, kernel_size=3, padding=1, stride=1, groups=1,
                               bias=True)
+        # self.intro = DoubleConv(in_ch=img_channel * 2, out_ch=width, mid_ch=width)
         self.enhance = RCAB(num_feat=width)
         
         ################## fix input size
@@ -199,17 +203,30 @@ class ConditionalNAFNet(nn.Module):
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
         self.middle_blks = nn.ModuleList()
-        self.ups = nn.ModuleList()
         self.downs = nn.ModuleList()
-
+        self.ups = nn.ModuleList()
+        
         chan = width
         
+        if self.input_fuse:
+            self.first_fuse_block = FuseFreqSpatialAdaLN(freq_channels=2304, spatial_channels=chan, out_channels=chan, hidden_dim=chan * 4)
+        
+        # for only encoder integeration
+        # if self.input_fuse is False:
         self.FuseBlocks = nn.ModuleList([
-            FuseBlock(spacial_channels=chan, freuency_channels=72, num_heads=8, fourier_dim=(-2, -1)),
-            FuseBlock(spacial_channels=chan * 2, freuency_channels=144, num_heads=8, fourier_dim=(-2, -1)),
-            FuseBlock(spacial_channels=chan * 4, freuency_channels=288, num_heads=8, fourier_dim=(-2, -1)),
-            FuseBlock(spacial_channels=chan * 8, freuency_channels=576, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 2, frequency_channels=144, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 4, frequency_channels=288, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 8, frequency_channels=576, num_heads=8, fourier_dim=(-2, -1)),
+            FuseBlock(spacial_channels=chan * 16, frequency_channels=1152, num_heads=8, fourier_dim=(-2, -1)),
         ])
+        # else:
+        #     # for encoder and decpder integeration and initial fuse block
+        #     self.FuseBlocks = nn.ModuleList([
+        #         FuseBlock(spacial_channels=chan * 2, frequency_channels=72, num_heads=8, fourier_dim=(-2, -1)),
+        #         FuseBlock(spacial_channels=chan * 4, frequency_channels=144, num_heads=8, fourier_dim=(-2, -1)),
+        #         FuseBlock(spacial_channels=chan * 8, frequency_channels=288, num_heads=8, fourier_dim=(-2, -1)),
+        #         FuseBlock(spacial_channels=chan * 16, frequency_channels=576, num_heads=8, fourier_dim=(-2, -1)),
+        #     ])
         
         for num in enc_blk_nums:
             self.encoders.append(
@@ -217,9 +234,15 @@ class ConditionalNAFNet(nn.Module):
                     *[NAFBlock(chan, time_dim) for _ in range(num)]
                 )
             )
+            # self.downs.append(
+            #     nn.Conv2d(chan, 2*chan, 2, 2)
+            # )
+            
+            
             self.downs.append(
-                nn.Conv2d(chan, 2*chan, 2, 2)
+                DownConv(chan, chan * 2)
             )
+            
             chan = chan * 2
 
         self.middle_blks = \
@@ -228,12 +251,17 @@ class ConditionalNAFNet(nn.Module):
             )
 
         for num in dec_blk_nums:
+            # self.ups.append(
+            #     nn.Sequential(
+            #         nn.Conv2d(chan, chan * 2, 1, bias=False),
+            #         nn.PixelShuffle(2)
+            #     )
+            # )
+            
             self.ups.append(
-                nn.Sequential(
-                    nn.Conv2d(chan, chan * 2, 1, bias=False),
-                    nn.PixelShuffle(2)
-                )
+                UpConv(chan, chan // 2)
             )
+            
             chan = chan // 2
             self.decoders.append(
                 nn.Sequential(
@@ -242,8 +270,10 @@ class ConditionalNAFNet(nn.Module):
             )
 
         self.padder_size = 2 ** len(self.encoders)
+        self.uno_features = None
+        self.last_layer_feature = None
 
-    def forward(self, inp, cond, time):
+    def forward(self, inp, cond, time, freq_features=None):
         inp_res = inp.clone()
                 
         if isinstance(time, int) or isinstance(time, float):
@@ -253,48 +283,52 @@ class ConditionalNAFNet(nn.Module):
     
         x = torch.cat([x, cond], dim=1)
 
+        
         t = self.time_mlp(time)
         
         B, C, H, W = x.shape
         x = self.check_image_size(x)
+        cond = self.check_image_size(cond)
 
         x = self.intro(x)
-
+        if freq_features is not None:
+            self.uno_features, self.last_layer_feature = freq_features
+            
         # RCAB enhance
         x = x + self.enhance(x)
-
-        encs = []
         
-        if self.uno is not None:
-            cond_input = cond.permute(0, 2, 3, 1)
-            uno_features = self.uno(cond_input)
-
+        if self.input_fuse:
+            x = self.first_fuse_block(self.last_layer_feature, x)
+        encs = [x]
+        
         for idx, (encoder, down) in enumerate(zip(self.encoders, self.downs)):
             x, _ = encoder([x, t])
-            if self.uno is not None:
-                uno_feature = uno_features[idx]
-                x = self.FuseBlocks[idx](x, uno_feature)
-                
-                # Save the feature map as an RGB image for visualization
-                # Take the first 3 channels, normalize to [0,1], and save
-                # save_dir = "/home/yuki/research/EDiffSR/debug"
-                # feature_to_save = x[0, :3, :, :]
-                # feature_min = feature_to_save.min()
-                # feature_max = feature_to_save.max()
-                # feature_norm = (feature_to_save - feature_min) / (feature_max - feature_min + 1e-8)
-                # save_image(feature_norm, os.path.join(save_dir, f"feature_{idx}.png"), nrow=8, normalize=True)
             encs.append(x)
-            x = down(x)
-            # print("x shape", x.shape)
-
+            
+            if self.uno is not None:
+                uno_feature = self.uno_features[idx]
+                x = down(x)
+                x = self.FuseBlocks[idx](x, uno_feature)
+            else:
+                x = down(x)        
+        
         x, _ = self.middle_blks([x, t])
+        
+        if self.enc_plus_dec_uno:
+            if self.uno is not None:
+                for decoder, up, enc_skip, uno_feature, fuse_block in zip(self.decoders, self.ups, encs[::-1], self.uno_features[::-1], self.FuseBlocks[::-1]):
+                    # print(f"x {x.shape} Enc Skip {enc_skip.shape}")
+                    x = up(x, enc_skip, x_freq=uno_feature, fuse_block=fuse_block)
+                    x, _ = decoder([x, t])
+            else:
+                raise ValueError("When enc_plus_dec_uno is True, uno must be provided.")
+        else:
+            for decoder, up, enc_skip in zip(self.decoders, self.ups, encs[::-1]):
+                # print(f"no fusion x {x.shape} Enc Skip {enc_skip.shape}")
+                x = up(x, enc_skip)
+                x = x + enc_skip
+                x, _ = decoder([x, t])
 
-        for decoder, up, enc_skip in zip(self.decoders, self.ups, encs[::-1]):
-            x = up(x)
-            x = x + enc_skip
-            x, _ = decoder([x, t])
-
-        # print("x shape before ending", x.shape)
         x = self.ending(x)
         
         return x
@@ -303,6 +337,7 @@ class ConditionalNAFNet(nn.Module):
         _, _, h, w = x.size()
         mod_pad_h = (self.padder_size - h % self.padder_size) % self.padder_size
         mod_pad_w = (self.padder_size - w % self.padder_size) % self.padder_size
+
         x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h))
         return x
         
@@ -323,4 +358,58 @@ def add_coord_channels(x):
     # Concatenate as new channels
     x_with_coords = torch.cat([x, x_coords, y_coords], dim=1)
     return x_with_coords
+
+class DoubleConv(nn.Module):
+    def __init__(self, in_ch, out_ch, mid_ch=None):
+        super().__init__()
+        if mid_ch is None:
+            mid_ch = out_ch
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid_ch, mid_ch, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
+
+class DownConv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.maxpool_conv = nn.Sequential(
+            nn.MaxPool2d(kernel_size=2),
+            DoubleConv(in_ch, out_ch)
+        )
+
+    def forward(self, x):
+        return self.maxpool_conv(x)
+
+
+class UpConv(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.up = nn.ConvTranspose2d(in_ch, in_ch // 2, kernel_size=2, stride=2)
+        self.conv = DoubleConv(in_ch, out_ch)
+
+    def forward(self, x1, x2, x_freq=None, fuse_block=None):
+        if x_freq is not None and fuse_block is not None:
+            x1 = fuse_block(x1, x_freq)
+        x1 = self.up(x1)
+        
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+        '''
+           if you have padding issues, see
+           https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
+           https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
+        '''
+        # print(f"UpConv x1 {x1.shape} x2 {x2.shape}")
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+
 

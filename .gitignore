@@ -80,3 +80,13 @@ codes/config/sisr/sde_state/
 codes/config/sisr/test_without_psnr.py
 debug
 codes/config/sisr/models/__pycache__/networks.cpython-39.pyc
+codes/config/sisr/models/denoising_model_profiler.py
+codes/config/sisr/models/modules/DenoisingNAFNet_arch_former.py
+codes/config/sisr/models/modules/DenoisingNAFNet_arch_former_vr2.py
+codes/config/sisr/models/modules/DenoisingNAFNet_arch_profiler.py
+codes/config/sisr/models/modules/__pycache__/AdaLN.cpython-39.pyc
+codes/config/sisr/train_profiler.py
+external/UNO/integral_operators_former_vr.py
+external/UNO/navier_stokes_uno2d_former_vr2.py
+external/UNO/navier_stokes_uno2d_profiler.py
+codes/config/sisr/RGB_channel_0_image.png

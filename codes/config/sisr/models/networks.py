@@ -8,8 +8,8 @@ import torch.nn as nn
 logger = logging.getLogger("base")
 
 import sys
-sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
-from navier_stokes_uno2d import UNO, UNO_HiLoc
+# sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
+# from navier_stokes_uno2d import UNO, UNO_HiLoc
 
 sys.path.append('/home/yuki/research/EDiffSR/external/galerkin_transformer/libs')
 
@@ -21,21 +21,45 @@ def define_G(opt):
     if which_model == "ConditionalNAFNet":
         uno = None
         if opt_net["use_uno"]:
-            if opt_net["use_uno_hiloc"]:
-                galerkin_config = opt_net.get("galerkin_transformer_setting", {})
-                uno = UNO_HiLoc(
-                    in_width=opt_net["uno_in_width"],
-                    width=opt_net["uno_width"],
-                    galerkin_config = galerkin_config,
-                    debug = True
-                )
+            if opt_net["input_fuse"]:
+                sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
+                from navier_stokes_uno2d_input_fusion import UNO, UNO_HiLoc
+                
+                if opt_net["use_uno_hiloc"]:
+                    galerkin_config = opt_net.get("galerkin_transformer_setting", {})
+                    uno = UNO_HiLoc(
+                        in_width=opt_net["uno_in_width"],
+                        width=opt_net["uno_width"],
+                        debug = True,
+                        input_fuse=opt_net["input_fuse"]
+                    )
+                else:
+                    uno = UNO(
+                        in_width=opt_net["uno_in_width"],
+                        width=opt_net["uno_width"]
+                    )
+                uno = uno.to("cuda")
             else:
-                uno = UNO(
-                    in_width=opt_net["uno_in_width"],
-                    width=opt_net["uno_width"]
-                )
+                sys.path.append('/home/yuki/research/EDiffSR/external/UNO')
+                from navier_stokes_uno2d import UNO, UNO_HiLoc
+                
+                if opt_net["use_uno_hiloc"]:
+                    galerkin_config = opt_net.get("galerkin_transformer_setting", {})
+                    uno = UNO_HiLoc(
+                        in_width=opt_net["uno_in_width"],
+                        width=opt_net["uno_width"],
+                        # image_size = opt_net["image_size"],
+                        debug = True,
+                        input_fuse=opt_net["input_fuse"]
+                    )
+                else:
+                    uno = UNO(
+                        in_width=opt_net["uno_in_width"],
+                        width=opt_net["uno_width"]
+                    )
+                uno = uno.to("cuda")
             
-        netG = getattr(M, which_model)(**setting, uno=uno)
+        netG = getattr(M, which_model)(**setting, uno=uno, enc_plus_dec_uno=opt_net["enc_plus_dec_uno"], input_fuse=opt_net["input_fuse"])
     else:
         netG = getattr(M, which_model)(**setting)
 
