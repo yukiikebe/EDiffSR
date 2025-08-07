@@ -303,14 +303,32 @@ class UNO_HiLoc(nn.Module):
                     int(input_factor * factor * width), int(output_factor * factor * width), dim1, dim2, mode1, mode2, Apply_linear_transform=False
                 ),
             )
+            
+        def make_Layer_all(width, factor, input_factor, output_factor, dim1_whole, dim2_whole, dim1, dim2, mode1_whole, mode2_whole, mode1, mode2):
+            return (
+                OperatorBlock_2D(
+                    int(input_factor * factor * width), int(output_factor * factor * width), dim1_whole, dim2_whole, mode1_whole, mode2_whole
+                ),
+                OperatorBlock_2D(
+                    int(input_factor * factor * width), int(output_factor * factor * width), dim1, dim2, mode1, mode2, Apply_linear_transform=False
+                ),
+            )
 
-        self.L0_whole = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 22, 22)
-        self.L0_patches = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 22, 22, Apply_linear_transform=False)
-        # 
-        self.L1_whole, self.L1_patches = make_Layer(self.width, self.factor, 2, 4, 32, 32, 14, 14)
-        self.L2_whole, self.L2_patches = make_Layer(self.width, self.factor, 4, 8, 16, 16, 6, 6)
-        self.L3_whole, self.L3_patches = make_Layer(self.width, self.factor, 8, 16, 8, 8, 4, 4)
-        self.L4_whole, self.L4_patches = make_Layer(self.width, self.factor, 16, 32, 4, 4, 2, 2)
+        # self.L0_whole = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 22, 22)
+        # self.L0_patches = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 22, 22, Apply_linear_transform=False)
+        
+        # self.L1_whole, self.L1_patches = make_Layer(self.width, self.factor, 2, 4, 32, 32, 14, 14)
+        # self.L2_whole, self.L2_patches = make_Layer(self.width, self.factor, 4, 8, 16, 16, 6, 6)
+        # self.L3_whole, self.L3_patches = make_Layer(self.width, self.factor, 8, 16, 8, 8, 4, 4)
+        # self.L4_whole, self.L4_patches = make_Layer(self.width, self.factor, 16, 32, 4, 4, 2, 2)
+
+        self.L0_whole = OperatorBlock_2D(self.width, int(2 * factor * self.width), 192, 192, 80, 80)
+        self.L0_patches = OperatorBlock_2D(self.width, int(2 * factor * self.width), 48, 48, 24, 24, Apply_linear_transform=False)
+        
+        self.L1_whole, self.L1_patches = make_Layer_all(self.width, self.factor, 2, 4, 144, 144, 32, 32, 50, 50, 16, 16)
+        self.L2_whole, self.L2_patches = make_Layer_all(self.width, self.factor, 4, 8, 108, 108, 16, 16, 25, 25, 8, 8)
+        self.L3_whole, self.L3_patches = make_Layer_all(self.width, self.factor, 8, 16, 81, 81, 8, 8, 14, 14, 4, 4)
+        self.L4_whole, self.L4_patches = make_Layer_all(self.width, self.factor, 16, 32, 60, 60, 4, 4, 7, 7, 2, 2)
 
         # self.L4_whole, self.L4_patches = make_Layer(self.width, self.factor, 16, 16, 8, 8, 4, 4)
         # self.L5_whole, self.L5_patches = make_Layer(self.width, self.factor, 16, 8, 16, 16, 6, 6)

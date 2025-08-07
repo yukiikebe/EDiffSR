@@ -1,3 +1,4 @@
+import pprint
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,18 +13,7 @@ from utilities3 import *
 from Adam import Adam
 from PIL import Image
 import os
-
-def make_coord(shape, ranges=None, flatten=False):
-    coord_seqs = []
-    for i, n in enumerate(shape):
-        v0, v1 = (-1, 1) if ranges is None else ranges[i]
-        r = torch.linspace(v0, v1, steps=n)
-        coord_seqs.append(r)
-    coords = torch.meshgrid(*coord_seqs, indexing='ij')
-    coord = torch.stack(coords, dim=-1)  # [H, W, 2]
-    if flatten:
-        coord = coord.view(-1, 2)
-    return coord
+from tqdm import tqdm
 
 def train_model(
     model,
@@ -37,7 +27,7 @@ def train_model(
     T_f=1,  
     step=1,
     batch_size=16,
-    epochs=500,
+    epochs=105,
     learning_rate=0.001,
     scheduler_step=100,
     scheduler_gamma=0.5,
@@ -51,7 +41,8 @@ def train_model(
         optimizer, step_size=scheduler_step, gamma=scheduler_gamma
     )
     Min_error_t = float("inf")
-    myloss = LpLoss(size_average=False)
+    # myloss = LpLoss(p=1, size_average=False)
+    loss_fn = torch.nn.L1Loss()
     
     weight_dir = "./weights"
     if not os.path.exists(weight_dir):
@@ -60,39 +51,52 @@ def train_model(
 
     model.to(device)
 
-    for ep in range(epochs):
+    for ep in tqdm(range(epochs), desc="Epochs"):
         model.train()
         t1 = default_timer()
         train_l2 = 0.0
 
         for x, y in train_loader:
-            x = x.to(device)  # LR edge image: [B, 3, 16, 16]
-            y = y.to(device)  # HR edge image: [B, 3, 256, 256]
-            # Save images for checking
-            if ep == 0:  
-                save_dir = "./saved_images"
-                os.makedirs(save_dir, exist_ok=True)
-                for i in range(min(5, x.size(0))):  # Save up to 5 samples
-                    x_img = (x[i].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)  # [1, 16, 16]
-                    y_img = (y[i].cpu().permute(1, 2, 0).numpy() * 255).astype(np.uint8)  # [256, 256]
-                    # print("x_img shape and y_shape",x_img.shape, y_img.shape)
-                    x_img = Image.fromarray(x_img)  
-                    y_img = Image.fromarray(y_img)  
-                    
-                    x_img.save(f"{save_dir}/x_sample_{i}.png")
-                    y_img.save(f"{save_dir}/y_sample_{i}.png")
+            x = x.to(device)  # Upsampling LR image: [B, 3, 256, 256]
+            y = y.to(device)  # HR image: [B, 3, 256, 256]
                     
             B, _, H_hr, W_hr = y.shape
 
-            x = x.permute(0, 2, 3, 1)  # [B, 16, 16, 1]
+            x = x.permute(0, 2, 3, 1)
 
-            coord = make_coord((H_hr, W_hr)).unsqueeze(0).repeat(B, 1, 1, 1).to(device)  # [B, H, W, 2]
+            pred = model(x)
+            # print(f"pred shape: {pred.shape}, y shape: {y.shape}")
+            
+            # pred = pred.permute(0, 3, 1, 2)
 
-            model.gen_feat(x)
-            pred = model.query_features(coord)  # [B, H, W, 1]
-            pred = pred.permute(0, 3, 1, 2)  # [B, 1, H, W] for loss
+            save_dir = f"./saved_images/SR_images/epoch_{ep}"
+            os.makedirs(save_dir, exist_ok=True)
+            existing_images = [f for f in os.listdir(save_dir) if f.startswith("pred_sample_") and f.endswith(".png")]
+            
+            if len(existing_images) < 3:
+                num_to_save = min(3 - len(existing_images), pred.size(0))
+                for i in range(num_to_save):
+                    # Save predicted image
+                    pred_img = pred[i].detach().cpu()
+                    pred_img = torch.clamp(pred_img, 0.0, 1.0)
+                    pred_img = (pred_img * 255).numpy().astype(np.uint8)
+                    pred_img_pil = Image.fromarray(pred_img)
+                    pred_img_pil.save(f"{save_dir}/pred_sample_{len(existing_images) + i}.png")
 
-            loss = myloss(pred.reshape(B, -1), y.reshape(B, -1))
+                    # Save ground truth image
+                    y_img = y[i].detach().cpu().permute(1, 2, 0)
+                    y_img = (y_img * 255).clamp(0, 255).to(torch.uint8)
+                    y_img_pil = Image.fromarray(y_img.numpy())
+                    y_img_pil.save(f"{save_dir}/y_sample_{len(existing_images) + i}.png")
+            
+            # print(f"Epoch {ep+1}, Batch {x.shape[0]}: Predicted and ground truth images saved.")
+            # print(f"pred shape: {pred.shape}, y shape: {y.shape}")
+            # print(f"pred dtype: {pred.dtype}, y dtype: {y.dtype}")
+            # print("pred min, max:", pred.min().item(), pred.max().item())
+            # print("y min, max:", y.min().item(), y.max().item())
+            # loss = myloss(pred, y)
+            pred = pred.permute(0, 3, 1, 2)  # [B, C, H, W]
+            loss = loss_fn(pred, y)
 
             optimizer.zero_grad()
             loss.backward()
@@ -112,13 +116,12 @@ def train_model(
                 y = y.to(device)
                 B, _, H_hr, W_hr = y.shape
                 x = x.permute(0, 2, 3, 1)
-                coord = make_coord((H_hr, W_hr)).unsqueeze(0).repeat(B, 1, 1, 1).to(device)
 
-                model.gen_feat(x)
-                pred = model.query_features(coord)
+                pred = model(x)
                 pred = pred.permute(0, 3, 1, 2)
 
-                loss = myloss(pred.reshape(B, -1), y.reshape(B, -1))
+                # loss = myloss(pred, y)
+                loss = loss_fn(pred, y)
                 val_l2 += loss.item()
                 del x, y, pred
 
@@ -144,13 +147,13 @@ def train_model(
             y = y.to(device)
             B, _, H_hr, W_hr = y.shape
             x = x.permute(0, 2, 3, 1)
-            coord = make_coord((H_hr, W_hr)).unsqueeze(0).repeat(B, 1, 1, 1).to(device)
 
-            model.gen_feat(x)
-            pred = model.query_features(coord)
+            pred = model(x)
+            print(f"pred shape: {pred.shape}, y shape: {y.shape}")
             pred = pred.permute(0, 3, 1, 2)
 
-            loss = myloss(pred.reshape(B, -1), y.reshape(B, -1))
+            # loss = myloss(pred, y)
+            loss = loss_fn(pred, y)
             test_l2 += loss.item()
             del x, y, pred
 

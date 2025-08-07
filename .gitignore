@@ -90,3 +90,8 @@ external/UNO/integral_operators_former_vr.py
 external/UNO/navier_stokes_uno2d_former_vr2.py
 external/UNO/navier_stokes_uno2d_profiler.py
 codes/config/sisr/RGB_channel_0_image.png
+AID_all_category_train/
+AID_all_category_val/
+combine_all_category_img.py
+external/UNO/debug_images/
+external/UNO/saved_images/

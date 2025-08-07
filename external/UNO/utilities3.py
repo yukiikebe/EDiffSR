@@ -71,7 +71,7 @@ class MatReader(object):
     def set_float(self, to_float):
         self.to_float = to_float
 
-
+# L p(1, 2, ...) loss
 class LpLoss(object):
     def __init__(self, d=2, p=2, size_average=True, reduction=True):
         super(LpLoss, self).__init__()

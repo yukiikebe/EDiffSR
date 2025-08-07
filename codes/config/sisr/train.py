@@ -76,7 +76,7 @@ def main():
         # wandb_run = wandb.init(project='super resolution ediffsr', name='farmland_RGBNIR')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='Maryland_Multiband2')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNO', resume='must', id='tomtw0ij')
-        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_input_fusion')
+        wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_freq')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_encoder_decoder_fusion')
         # wandb_run = wandb.init(project='super resolution ediffsr', name='AID_UNOHiLoc_CPEM_combine_loss')
         wandb.config.update(opt, allow_val_change=True)

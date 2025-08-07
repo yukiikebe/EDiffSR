@@ -38,7 +38,7 @@ def train_model(
         optimizer, step_size=scheduler_step, gamma=scheduler_gamma
     )
     Min_error_t = 100000.000
-    myloss = LpLoss(size_average=False)
+    myloss = LpLoss(p=1, size_average=False)
     for ep in range(epochs):
         model.train()
         t1 = default_timer()

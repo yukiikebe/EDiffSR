@@ -18,19 +18,20 @@ class LayerNorm(nn.Module):
         return out
 
 class simple_attn(nn.Module):
-    def __init__(self, midc, heads):
+    def __init__(self, midc, heads, output_dim=None):
         super().__init__()
 
         self.headc = midc // heads
         self.heads = heads
         self.midc = midc
+        self.output_dim = output_dim if output_dim is not None else midc // 2
 
         self.qkv_proj = nn.Conv2d(midc, 3*midc, 1)
         self.o_proj1 = nn.Conv2d(midc, midc, 1)
         self.o_proj2 = nn.Conv2d(midc, midc, 1)
 
-        self.end = nn.Conv2d(midc, midc // 2, 1)
-        
+        self.end = nn.Conv2d(midc, self.output_dim, 1)
+
         self.kln = LayerNorm((self.heads, 1, self.headc))
         self.vln = LayerNorm((self.heads, 1, self.headc))
 

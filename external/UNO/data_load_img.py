@@ -1,19 +1,21 @@
+from glob import glob
 import os
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import kornia.filters
+import glob
 
 class EdgeDataset(Dataset):
     def __init__(self, lr_dir, hr_dir):
         """
         Args:
-            lr_dir (str): Path to Low-Resolution (16x16) images. --> (256x256)
+            lr_dir (str): Path to Low-Resolution (64x64) images. --> (256x256)
             hr_dir (str): Path to High-Resolution (256x256) images.
         """
-        self.lr_files = sorted([os.path.join(lr_dir, f) for f in os.listdir(lr_dir) if f.endswith(('png', 'jpg', 'jpeg'))])
-        self.hr_files = sorted([os.path.join(hr_dir, f) for f in os.listdir(hr_dir) if f.endswith(('png', 'jpg', 'jpeg'))])
+        self.lr_files = sorted(glob.glob(os.path.join(lr_dir, '*', '*.jpg')))
+        self.hr_files = sorted(glob.glob(os.path.join(hr_dir, '*', '*.jpg')))
 
         assert len(self.lr_files) == len(self.hr_files), "Mismatch between number of LR and HR images!"
 
@@ -29,7 +31,7 @@ class EdgeDataset(Dataset):
         hr_img = Image.open(self.hr_files[idx]).convert("RGB")
 
         # Resize LR image to 256x256
-        lr_img = lr_img.resize((256, 256), Image.BICUBIC)
+        lr_img = lr_img.resize((256, 256), resample=Image.BICUBIC)
         # Grayscale and ToTensor
         # lr_img = self.to_tensor(self.to_grayscale(lr_img))  
         # hr_img = self.to_tensor(self.to_grayscale(hr_img))  
